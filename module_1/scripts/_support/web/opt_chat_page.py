@@ -30,7 +30,7 @@ def render_page(
     summary = (
         metrics_panel(metrics)
         if metrics
-        else "<div class='hint'>The benchmark measures one forward pass. This demo generates multiple new tokens, so the full response takes several forward passes plus tokenization and sampling.</div>"
+        else "<div class='hint'>The benchmark measured one forward pass. This demo generates multiple new tokens, so the full response takes several forward passes plus tokenization and sampling.</div>"
     )
     return f"""<!doctype html>
 <html lang="en">
@@ -212,7 +212,7 @@ def render_page(
   <main class="shell">
     <section class="hero">
       <h1>OPT-125M on ExecuTorch</h1>
-      <p class="lede">A Pi-hosted text generation demo using the lowered XNNPACK model. The timing panel shows why text generation takes longer than a single benchmarked forward pass.</p>
+      <p class="lede">A Pi-hosted text generation demo using the lowered XNNPACK model.</p>
       <div class="meta">
         <div class="pill">Model: {html.escape(str(startup["model"]))}</div>
         <div class="pill">Context: {startup["seq_len"]} tokens</div>

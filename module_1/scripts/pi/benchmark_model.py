@@ -74,7 +74,9 @@ def main() -> None:
 
     times_ms, stats = benchmark(forward, warmups=args.warmups, runs=args.runs)
     plot_dir = args.plots or args.out.parent / "plots"
-    plot_paths = save_plots(times_ms, title=result_name, out_dir=plot_dir)
+    plot_paths = []
+    if should_plot_result(backend):
+        plot_paths = save_plots(times_ms, title=result_name, out_dir=plot_dir)
     write_results(
         out=args.out,
         runtime=args.runtime,
@@ -147,6 +149,10 @@ def format_result_name(model_name: str, runtime: str, backend: str) -> str:
     if runtime == "pytorch":
         return f"{model_name}_pytorch"
     return f"{model_name}_{backend}"
+
+
+def should_plot_result(backend: str) -> bool:
+    return backend != "portable"
 
 
 if __name__ == "__main__":

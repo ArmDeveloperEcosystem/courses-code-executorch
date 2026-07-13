@@ -746,23 +746,29 @@ Then open the dashboard locally on your development machine:
 http://localhost:8080
 ```
 
-TODO RESULTS IMAGE HERE
-
 Because only the OPT benchmark files have been generated so far, the dashboard should show the PyTorch, portable ExecuTorch, and XNNPACK ExecuTorch runs for OPT-125M. Later, after the DistilBERT benchmarks, the same dashboard will include both models.
 
+The dashboard table summarizes the run count and latency statistics for each runtime:
+
+![OPT-125M benchmark results summary in the browser dashboard.](images/opt125m-results-dashboard-summary.png)
+
 Read the table and plots together. The table includes PyTorch, portable ExecuTorch, and XNNPACK. The plots are shown for PyTorch and XNNPACK only, where repeated runs make a histogram and time series meaningful. The mean and median show typical latency. The minimum and maximum show how much the run varied. The histogram shows whether most timings are clustered or spread out, and the run-by-run plot can reveal drift from system load, CPU frequency changes, or thermal effects.
+
+The plot section shows the PyTorch and XNNPACK latency distributions and run-by-run timing:
+
+![OPT-125M PyTorch and XNNPACK benchmark plots in the browser dashboard.](images/opt125m-results-dashboard-plots.png)
 
 For one Raspberry Pi run with the pinned Module 1 environment, the OPT benchmark reported:
 
 | Runtime | Warmups | Runs | Mean | Median | Min | Max |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| PyTorch eager | 2 | 20 | 512.96 ms | 510.94 ms | 493.02 ms | 574.86 ms |
-| ExecuTorch portable | 1 | 1 | 65,312.65 ms | 65,312.65 ms | 65,312.65 ms | 65,312.65 ms |
-| ExecuTorch with XNNPACK | 2 | 20 | 305.90 ms | 301.17 ms | 300.01 ms | 322.87 ms |
+| PyTorch eager | 2 | 20 | 488.90 ms | 491.19 ms | 478.58 ms | 495.47 ms |
+| ExecuTorch portable | 1 | 1 | 64,372.10 ms | 64,372.10 ms | 64,372.10 ms | 64,372.10 ms |
+| ExecuTorch with XNNPACK | 2 | 20 | 301.44 ms | 300.87 ms | 300.28 ms | 304.35 ms |
 
-The portable ExecuTorch result is a single measured run, so treat it as a baseline check rather than a latency distribution. It shows that the exported portable `.pte` can execute on the Pi, but it also shows why the portable kernel path is not the performance path for this OPT workload.
+The portable ExecuTorch result is a single measured run, so treat it as a baseline check rather than a latency distribution. At 64,372.10 ms, it took about 64.4 seconds for one forward pass. It shows that the exported portable `.pte` can execute on the Pi, but it also shows why the portable kernel path is not the performance path for this OPT workload.
 
-The XNNPACK result is the main comparison. In this run, XNNPACK reduced mean latency from 512.96 ms to 305.90 ms compared with PyTorch eager execution, about a 1.7x speedup. The median tells the same story: 510.94 ms for PyTorch eager compared with 301.17 ms for XNNPACK.
+The XNNPACK result is the main comparison. In this run, XNNPACK reduced mean latency from 488.90 ms to 301.44 ms compared with PyTorch eager execution, about a 1.6x speedup and about 38% lower mean latency. The median tells the same story: 491.19 ms for PyTorch eager compared with 300.87 ms for XNNPACK.
 
 Now connect that timing back to the lowering evidence. The XNNPACK `.pte` was larger than the portable `.pte`, and the graph still had 50 XNNPACK delegate call sites plus 632 fallback `call_function` operators, but the delegated regions captured enough expensive transformer work to outweigh the backend boundary costs. This is the deployment trade-off in miniature: a larger delegated artifact, but substantially lower CPU latency on this target.
 
@@ -1175,6 +1181,11 @@ deployed across all of them.
 If portable ExecuTorch was slower than PyTorch in your run, that is
 expected in many environments.
 
+In the final OPT-125M run, portable ExecuTorch took 64,372.10 ms for one
+measured forward pass, while PyTorch eager averaged 488.90 ms over 20
+runs. That is not a small tuning difference; it is evidence that this
+particular transformer workload needs an optimized CPU path on the Pi.
+
 The portable path uses broadly compatible operator implementations. This
 makes it useful as a deployment path, but it is not necessarily the
 highest-performance CPU path.
@@ -1213,6 +1224,11 @@ backend?”
 
 If you observed a latency improvement after XNNPACK delegation, that
 suggests backend optimization is important for CPU-based edge inference.
+
+For OPT-125M, XNNPACK lowered the mean latency to 301.44 ms compared
+with 488.90 ms for PyTorch eager. That is the key evidence that
+delegation captured enough expensive work to matter on this target,
+despite the graph still containing fallback operators.
 
 However, delegate call count alone is not enough. You also need to
 consider:
