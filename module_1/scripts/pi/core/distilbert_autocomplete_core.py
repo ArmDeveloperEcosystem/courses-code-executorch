@@ -13,7 +13,7 @@ MODULE1_SCRIPTS = Path(__file__).resolve().parents[2]
 if str(MODULE1_SCRIPTS) not in sys.path:
     sys.path.insert(0, str(MODULE1_SCRIPTS))
 
-from _support.common import configure_quiet_output, suppress_stderr
+from _support.common import configure_quiet_output, load_executorch_program, suppress_stderr
 
 
 WORD_RE = re.compile(r"^[A-Za-z]+$")
@@ -117,14 +117,13 @@ def load_distilbert_autocomplete_runner(spec_path: Path, pte_path: Path) -> Dist
     configure_quiet_output(include_transformers=True)
 
     with suppress_stderr():
-        from executorch.extension.pybindings.portable_lib import _load_for_executorch
         from transformers import AutoTokenizer
 
     load_started = time.perf_counter()
     spec = json.loads(spec_path.read_text())
     with suppress_stderr():
         tokenizer = AutoTokenizer.from_pretrained(spec["model_id"], use_fast=True)
-        model = _load_for_executorch(str(pte_path))
+        model = load_executorch_program(pte_path)
 
     startup = {
         "model": spec["model_id"],

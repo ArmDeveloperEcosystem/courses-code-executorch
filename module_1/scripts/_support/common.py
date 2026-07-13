@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from contextlib import contextmanager
+from importlib.metadata import PackageNotFoundError, version
 import logging
 import os
 from pathlib import Path
@@ -86,6 +87,35 @@ def load_hf_model(model_cls: Any, model_id: str) -> Any:
         return model_cls.from_pretrained(model_id, dtype=torch.float32)
     except TypeError:
         return model_cls.from_pretrained(model_id, torch_dtype=torch.float32)
+
+
+def load_executorch_program(pte_path: Path | str) -> Any:
+    try:
+        from executorch.extension.pybindings.portable_lib import _load_for_executorch
+    except ImportError as exc:
+        raise RuntimeError(
+            "Could not import ExecuTorch portable pybindings. This usually means "
+            "the Python, torch, and executorch wheels in this virtual environment "
+            "are not ABI-compatible. Module 1 is pinned for Python 3.11. If this "
+            "venv was created with Python 3.13, remove it and recreate it with "
+            "`PYENV_VERSION=3.11.14 python -m venv "
+            "~/executorch_on_arm/.cpu_lab_venv`, then reinstall "
+            "`module_1/requirements.txt`. If you are not using pyenv, use your "
+            "system Python 3.11 command instead.\n\n"
+            f"Python: {sys.version.split()[0]}\n"
+            f"torch: {installed_version('torch')}\n"
+            f"executorch: {installed_version('executorch')}\n"
+            f"Original import error: {exc}"
+        ) from exc
+
+    return _load_for_executorch(str(pte_path))
+
+
+def installed_version(package_name: str) -> str:
+    try:
+        return version(package_name)
+    except PackageNotFoundError:
+        return "not installed"
 
 
 class LastTokenLogits:

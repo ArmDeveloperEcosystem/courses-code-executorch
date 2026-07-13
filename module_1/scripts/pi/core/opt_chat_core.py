@@ -12,7 +12,7 @@ MODULE1_SCRIPTS = Path(__file__).resolve().parents[2]
 if str(MODULE1_SCRIPTS) not in sys.path:
     sys.path.insert(0, str(MODULE1_SCRIPTS))
 
-from _support.common import configure_quiet_output, suppress_stderr
+from _support.common import configure_quiet_output, load_executorch_program, suppress_stderr
 
 
 @dataclass(frozen=True)
@@ -104,7 +104,6 @@ def load_opt_chat_runner(spec_path: Path, pte_path: Path) -> OptChatRunner:
     configure_quiet_output(include_transformers=True)
 
     with suppress_stderr():
-        from executorch.extension.pybindings.portable_lib import _load_for_executorch
         from transformers import AutoTokenizer
 
     load_started = time.perf_counter()
@@ -113,7 +112,7 @@ def load_opt_chat_runner(spec_path: Path, pte_path: Path) -> OptChatRunner:
         tokenizer = AutoTokenizer.from_pretrained(spec["model_id"])
         if tokenizer.pad_token is None:
             tokenizer.pad_token = tokenizer.eos_token
-        model = _load_for_executorch(str(pte_path))
+        model = load_executorch_program(pte_path)
 
     startup = {
         "model": spec["model_id"],

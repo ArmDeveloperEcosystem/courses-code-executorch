@@ -225,13 +225,18 @@ git clone https://github.com/arm-education/executorch_on_arm_v2.git ~/executorch
 cd ~/executorch_on_arm
 ```
 
-Create a new Python virtual environment and activate it. Install PyTorch and ExecuTorch using pip. Also install the HF transformers library (where we will access our models), matplotlib and numpy for collecting data and plotting graphs, and huggingface_hub for interfacing with HF. 
+Create a new Python 3.11 virtual environment and activate it. Install the pinned Module 1 Python dependencies. These include PyTorch, ExecuTorch, the HF transformers library, matplotlib and numpy for collecting data and plotting graphs, and huggingface_hub for interfacing with HF.
 
 ```bash
-python3 -m venv .cpu_aot_venv
+PYENV_VERSION=3.11.14 python -m venv .cpu_aot_venv
 source .cpu_aot_venv/bin/activate
-pip install torch executorch transformers matplotlib numpy huggingface_hub
+python --version
+python -m pip install -r module_1/requirements.txt
 ```
+
+Use Python 3.11 for this module. The ExecuTorch Python package includes native pybindings that must match the installed PyTorch build. A virtual environment created with a different Python version, such as Python 3.13, can install incompatible wheels and fail later when loading a `.pte`.
+
+The `PYENV_VERSION` prefix asks pyenv to use the installed Python 3.11.14 interpreter even if the generic `python3.11` command is not active in your shell. If you are not using pyenv and your system provides `python3.11`, use `python3.11 -m venv .cpu_aot_venv` instead of the first command above.
 
 We will use HuggingFace to provide our models in this module. If you have not already got an account on HuggingFace, create one and generate an authentication key. Login to HuggingFace via terminal (see below), and when prompted, provide your authentication key:
 
@@ -437,15 +442,39 @@ module_1/scripts/aot/lower_to_executorch.py \
 
 This creates `opt125m_xnnpack.pte` and `opt125m_xnnpack.json`. The XNNPACK metadata includes the delegation summary printed by the script.
 
+For one run of OPT-125M with the pinned Module 1 environment, the script
+reported:
+
+| Artifact | Backend | PTE size |
+| --- | --- | ---: |
+| `opt125m_portable.pte` | portable | 501.12 MB |
+| `opt125m_xnnpack.pte` | XNNPACK | 655.57 MB |
+
+The XNNPACK artifact is about 154 MB larger than the portable artifact.
+That increase comes from backend-specific lowered data and metadata
+stored inside the `.pte`. This is normal: delegation can improve runtime
+performance, but it can also make the deployable artifact larger.
+
+The same XNNPACK run reported:
+
+- XNNPACK delegate call sites: 50
+- fallback `call_function` operators: 632
+
+The fallback list was dominated by graph bookkeeping, shape, mask, and
+normalization-related operations, including `alloc` (285), `getitem`
+(111), `expand_copy` (49), `native_layer_norm` (25), and several mask or
+elementwise operations such as `logical_not`, `mul.Scalar`,
+`scalar_tensor`, and `where` (24 each).
+
 Read that summary before moving on. When ExecuTorch lowers with XNNPACK, it partitions the graph. Supported subgraphs become XNNPACK delegate regions. The remaining operators stay on the default ExecuTorch path, backed by the Portable Kernel Library.
 
 The delegate call count tells you how many separate XNNPACK regions were created. The fallback operator list shows what did not make it into those regions.
 
-More delegation is usually good, but the shape of the delegation matters. A few large delegated regions are better than many small regions split up by fallback operators. If execution has to keep moving between XNNPACK and the default path, that graph fragmentation can eat into the benefit.
+More delegation is usually good, but the shape of the delegation matters. A few large delegated regions are better than many small regions split up by fallback operators. In the example above, 50 delegate call sites means XNNPACK found useful regions, but it also means the graph is not one continuous delegated block. If execution has to keep moving between XNNPACK and the default path, that graph fragmentation can eat into the benefit.
+
+Do not treat the fallback count as a direct measure of runtime cost. Some fallback operators are cheap tensor bookkeeping, while a smaller number of delegated operators may contain the expensive matrix operations that dominate transformer inference. Use the PTE size, delegate count, fallback list, Model Explorer graph, and benchmark timing together.
 
 When you inspect the lowered graph in Model Explorer in the next step, delegated regions will appear as `LoweredBackendModule` blocks. Each one represents a subgraph that will run through XNNPACK.
-
-You may notice that the XNNPACK `.pte` is larger than the portable `.pte`. That is expected. Delegation adds backend metadata to the program. The trade-off is usually worthwhile when enough expensive operators are delegated, but it is a reminder to look at both latency and artifact size.
 
 ### 3. Inspect OPT Delegation with Model Explorer
 
@@ -458,17 +487,20 @@ In this module, we use it to compare the exported PyTorch graph before lowering 
 Install Model Explorer and the Arm `.pte` adapter in your development machine environment:
 
 ```bash
-pip install ai-edge-model-explorer pte-adapter-model-explorer
+.cpu_aot_venv/bin/python -m pip install -r module_1/requirements-model-explorer.txt
 ```
 
 The PTE adapter is needed for ExecuTorch `.pte` files. The exported PyTorch program, `opt125m_exported.pt2`, can be opened by Model Explorer's built-in PyTorch exported program support.
 
-Start Model Explorer with the PTE adapter enabled:
+Start Model Explorer with the PTE adapter enabled. Run the executable from the virtual environment explicitly, so your shell does not accidentally pick up a global `model-explorer` command:
 
 ```bash
-model-explorer \
+.cpu_aot_venv/bin/model-explorer \
+  --port 8081 \
   --extensions=pte_adapter_model_explorer
 ```
+
+Model Explorer runs a local server and keeps this terminal session busy. We force it to use port `8081`, so this module keeps the Raspberry Pi result dashboard and application demos on different ports. When you are finished inspecting graphs, return to the terminal and press `Ctrl+C` to stop it.
 
 In the browser UI, select these three files from your machine and open them:
 
@@ -476,11 +508,34 @@ In the browser UI, select these three files from your machine and open them:
 - `module_1/artifacts/opt125m/opt125m_portable.pte`
 - `module_1/artifacts/opt125m/opt125m_xnnpack.pte`
 
-TODO MODEL EXPLORER IMAGES HERE
-
 Use the `.pt2` view as the reference graph. It shows the exported PyTorch program before ExecuTorch has packaged it for deployment. You should see the fixed input contract from the preparation step: `input_ids` and `attention_mask`, each shaped `[1, 128]`, and an output shaped `[1, 50272]` for the final-token vocabulary logits.
 
-Then compare the two `.pte` files. The portable `.pte` is the default ExecuTorch path, so it should not contain XNNPACK delegate regions. The XNNPACK `.pte` should show delegated blocks, often named as `LoweredBackendModule` or XNNPACK backend regions depending on the adapter version. Open those regions and look for the expensive transformer work that was captured by the backend, such as linear and batch-matmul-style operations.
+![Model Explorer view of the exported OPT-125M PyTorch program.](images/opt125m-model-explorer-exported-pt2.png)
+
+Then open the portable `.pte`. This is the baseline ExecuTorch program without XNNPACK delegation. It shows how the model looks when the graph runs through the default ExecuTorch portable-kernel path.
+
+![Model Explorer view of the portable OPT-125M ExecuTorch PTE.](images/opt125m-model-explorer-portable-pte.png)
+
+In the portable view, look for:
+
+- regular ExecuTorch `KernelCall` nodes rather than backend delegate regions
+- visible `aten::` operators, because ATen is PyTorch's core operator library
+- repeated transformer patterns such as `aten::addmm`, `aten::bmm`, `aten::_softmax`, `aten::native_layer_norm`, `aten::relu`, and residual `aten::add`
+- layout and shape-manipulation operators such as `aten::permute_copy`, `aten::expand_copy`, `aten::unsqueeze_copy`, and dim-order copies
+
+Those shape and layout operators are worth noticing. They are often cheap compared with the large matrix operations, but they can become boundaries around optimized backend regions.
+
+Now compare the XNNPACK `.pte` with the portable graph. The XNNPACK `.pte` should show delegated blocks, often named as `LoweredBackendModule`, `XnnpackBackend`, or XNNPACK backend regions depending on the adapter version.
+
+![Model Explorer view of the XNNPACK-delegated OPT-125M ExecuTorch PTE.](images/opt125m-model-explorer-xnnpack-pte.png)
+
+The backend has changed the execution plan. In the reference screenshot, the top-level graph is smaller than the portable graph, and many supported regions have been replaced with XNNPACK delegate nodes. The input and output contract stays the same: two `[1, 128]` inputs and one `[1, 50272]` output.
+
+Open one of the delegated regions and look for the expensive transformer work that was captured by the backend, such as linear and batch-matmul-style operations.
+
+![Model Explorer view of an OPT-125M XNNPACK delegate subgraph.](images/opt125m-model-explorer-xnnpack-subgraph.png)
+
+Inside the XNNPACK delegate subgraph, you may see backend-level operators such as `XNNFullyConnected`, `XNNBatchMatrixMultiply`, `XNNStaticTranspose`, `XNNAdd`, `XNNMultiply`, and `XNNSoftmax`.
 
 The main thing to notice is what changed between the three views:
 
@@ -488,7 +543,18 @@ The main thing to notice is what changed between the three views:
 - the portable `.pte` shows the deployable ExecuTorch graph without backend delegation
 - the XNNPACK `.pte` shows which parts of the deployable graph were delegated and which operators still run on the default path
 
-For OPT-125M, expect the XNNPACK graph to be mixed rather than perfectly clean. Transformer decoder graphs contain masking, reshapes, layout changes, and indexing-style operations around the expensive matrix work. Those operators can break the graph into several delegated regions with default-path operators in between.
+For OPT-125M, expect the XNNPACK graph to be mixed rather than perfectly clean. Transformer decoder graphs contain masking, reshapes, layout changes, normalization, and indexing-style operations around the expensive matrix work. Those operators can break the graph into several delegated regions with default-path operators in between.
+
+Use this comparison to guide your interpretation:
+
+| Question | What to look for |
+| --- | --- |
+| Did XNNPACK group expensive work? | Larger delegated regions can indicate that supported transformer operations were grouped for optimized CPU execution. |
+| Did the graph fragment? | Multiple small delegate regions can indicate unsupported operators or boundaries between supported regions. |
+| What stayed on the default path? | Remaining portable operators may explain residual latency or runtime transitions. |
+| Did the artifact size change? | Backend delegation can improve latency but may increase the `.pte` size. |
+
+This is the key difference: XNNPACK does not replace the whole `.pte`. It captures supported subgraphs and leaves the rest of the program in ExecuTorch. In performance work, the balance between large delegated regions and remaining default-path operators is often more important than the raw number of delegate nodes.
 
 ### 4. Raspberry Pi Setup
 
@@ -499,6 +565,17 @@ If connecting over SSH, do so whilst also port-forwarding specific ports we will
 ```bash
 ssh -L 8080:localhost:8080 -L 8090:localhost:8090 -L 8091:localhost:8091 <user>@<pi>
 ```
+
+The port mapping is:
+
+| Port | Used for |
+| ---: | --- |
+| `8080` | benchmark results dashboard |
+| `8081` | reserved for Model Explorer on the development machine |
+| `8090` | OPT chatbot demo |
+| `8091` | DistilBERT autocomplete demo |
+
+Do not use `8081` for the Raspberry Pi demos or results dashboard while Model Explorer is running.
 
 Clone the repo scripts onto the Pi if they are not already present.
 
@@ -512,17 +589,21 @@ environment inside `~/executorch_on_arm` with the scripts, artifacts, and
 results:
 
 ```bash
-python3 -m venv ~/executorch_on_arm/.cpu_lab_venv
+PYENV_VERSION=3.11.14 python -m venv ~/executorch_on_arm/.cpu_lab_venv
 source ~/executorch_on_arm/.cpu_lab_venv/bin/activate
-pip install torch executorch transformers matplotlib numpy huggingface_hub
+python --version
+python -m pip install -r module_1/requirements.txt
 hf auth login
 ```
+
+If your Pi does not use pyenv but has a system `python3.11` command, replace the first command above with `python3.11 -m venv ~/executorch_on_arm/.cpu_lab_venv`.
 
 ### 5. Copy OPT Artifacts to Raspberry Pi
 
 Run on your development machine to copy your model artifacts over to the target Pi:
 
 ```bash
+cd ~/executorch_on_arm
 ssh <user>@<pi> "mkdir -p ~/executorch_on_arm/module_1/artifacts"
 scp -r module_1/artifacts/opt125m <user>@<pi>:~/executorch_on_arm/module_1/artifacts/
 ```
@@ -567,9 +648,7 @@ The ExecuTorch branch is different. It loads a `.pte` file with the ExecuTorch P
 
 ```python
 with suppress_stderr():
-    from executorch.extension.pybindings.portable_lib import _load_for_executorch
-
-    model = _load_for_executorch(str(args.pte))
+    model = load_executorch_program(args.pte)
     inputs = example_inputs(spec)
 
 def forward() -> object:
@@ -673,6 +752,20 @@ Because only the OPT benchmark files have been generated so far, the dashboard s
 
 Read the table and plots together. The mean and median show typical latency. The minimum and maximum show how much the run varied. The histogram shows whether most timings are clustered or spread out, and the run-by-run plot can reveal drift from system load, CPU frequency changes, or thermal effects.
 
+For one Raspberry Pi run with the pinned Module 1 environment, the OPT benchmark reported:
+
+| Runtime | Warmups | Runs | Mean | Median | Min | Max |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| PyTorch eager | 2 | 20 | 512.96 ms | 510.94 ms | 493.02 ms | 574.86 ms |
+| ExecuTorch portable | 1 | 1 | 65,312.65 ms | 65,312.65 ms | 65,312.65 ms | 65,312.65 ms |
+| ExecuTorch with XNNPACK | 2 | 20 | 305.90 ms | 301.17 ms | 300.01 ms | 322.87 ms |
+
+The portable ExecuTorch result is a single measured run, so treat it as a baseline check rather than a latency distribution. It shows that the exported portable `.pte` can execute on the Pi, but it also shows why the portable kernel path is not the performance path for this OPT workload.
+
+The XNNPACK result is the main comparison. In this run, XNNPACK reduced mean latency from 512.96 ms to 305.90 ms compared with PyTorch eager execution, about a 1.7x speedup. The median tells the same story: 510.94 ms for PyTorch eager compared with 301.17 ms for XNNPACK.
+
+Now connect that timing back to the lowering evidence. The XNNPACK `.pte` was larger than the portable `.pte`, and the graph still had 50 XNNPACK delegate call sites plus 632 fallback `call_function` operators, but the delegated regions captured enough expensive transformer work to outweigh the backend boundary costs. This is the deployment trade-off in miniature: a larger delegated artifact, but substantially lower CPU latency on this target.
+
 For OPT, compare the timing with the lowering evidence. If portable ExecuTorch is slower than PyTorch eager, that is expected for this baseline: the portable path is optimized for operator coverage and deployability, not peak CPU performance. If XNNPACK is faster, look back at the delegation summary and Model Explorer view to see whether large linear and matmul-heavy regions were delegated. If XNNPACK is only a little faster, or not faster, that is also useful evidence. It may mean the graph was fragmented by fallback operators, or that runtime transitions between delegated and non-delegated regions ate into the backend gains.
 
 The point is not just to crown the fastest runtime. The benchmark should help explain what the exported model is actually doing on the Pi.
@@ -691,12 +784,6 @@ module_1/scripts/pi/serve_opt_chat.py \
   --port 8090
 ```
 
-If you did not forward port `8090` when you connected to the Pi, open a second terminal on your development machine:
-
-```bash
-ssh -L 8090:localhost:8090 <user>@<pi>
-```
-
 Then open:
 
 ```text
@@ -710,11 +797,11 @@ The serving script is mostly HTTP plumbing. The ExecuTorch-specific application 
 First, the app loads the tokenizer and the lowered `.pte` program:
 
 ```python
-from executorch.extension.pybindings.portable_lib import _load_for_executorch
+from _support.common import load_executorch_program
 from transformers import AutoTokenizer
 
 tokenizer = AutoTokenizer.from_pretrained(spec["model_id"])
-model = _load_for_executorch(str(pte_path))
+model = load_executorch_program(pte_path)
 ```
 
 Then each generation step prepares the fixed-shape input expected by the exported model, calls ExecuTorch, samples a next token, and appends it to the running sequence:
@@ -807,7 +894,25 @@ module_1/scripts/aot/lower_to_executorch.py \
   --backend xnnpack
 ```
 
-This creates `distilbert_fillmask_xnnpack.pte` and `distilbert_fillmask_xnnpack.json`. Read the printed delegation summary and compare it with OPT. DistilBERT may produce cleaner delegated regions because it does not have the autoregressive decoder loop shape, but it can still contain mask handling, reshapes, normalization, and elementwise operations that stay on the default path.
+This creates `distilbert_fillmask_xnnpack.pte` and `distilbert_fillmask_xnnpack.json`. Read the printed delegation summary and compare it with OPT.
+
+For one run of DistilBERT with the pinned Module 1 environment, the script reported:
+
+| Artifact | Backend | PTE size |
+| --- | --- | ---: |
+| `distilbert_fillmask_portable.pte` | portable | 268.03 MB |
+| `distilbert_fillmask_xnnpack.pte` | XNNPACK | 361.80 MB |
+
+The XNNPACK artifact is about 94 MB larger than the portable artifact. As with OPT, that extra size comes from backend-specific lowered data and metadata stored in the `.pte`.
+
+The same XNNPACK run reported:
+
+- XNNPACK delegate call sites: 27
+- fallback `call_function` operators: 354
+
+The fallback list was again dominated by graph bookkeeping, shape, mask, and normalization work, including `alloc` (161), `getitem` (60), `expand_copy` (25), and `native_layer_norm` (14). Mask and elementwise operations such as `logical_not`, `mul.Scalar`, `scalar_tensor`, and `where` also remained on the default path, along with DistilBERT-specific selection work such as `argmax` and `index`.
+
+Compared with the OPT run, DistilBERT produced fewer delegate call sites and fewer fallback operators. That does not automatically mean the graph is better optimized, but it is a useful signal. DistilBERT is an encoder with one fixed forward pass, not an autoregressive decoder used repeatedly for generation, so the graph can be less fragmented. It still contains mask handling, reshapes, normalization, and elementwise operations that stay on the default path.
 
 ### 3. Inspect DistilBERT Delegation with Model Explorer
 
@@ -816,9 +921,12 @@ Use the same Model Explorer setup from the OPT section.
 Run on the development machine after lowering DistilBERT. If Model Explorer is already running, use the same browser window. Otherwise, start it with the PTE adapter enabled:
 
 ```bash
-model-explorer \
+.cpu_aot_venv/bin/model-explorer \
+  --port 8081 \
   --extensions=pte_adapter_model_explorer
 ```
+
+When you are finished, press `Ctrl+C` in the Model Explorer terminal to stop the local server.
 
 In the browser UI, select these three files from your machine and open them:
 

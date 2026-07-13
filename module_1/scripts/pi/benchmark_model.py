@@ -18,6 +18,7 @@ from _support.common import (
     MaskLogits,
     configure_quiet_output,
     example_inputs,
+    load_executorch_program,
     load_hf_model,
     quiet_transformers_progress,
     suppress_stderr,
@@ -48,6 +49,9 @@ def main() -> None:
 
     spec = json.loads(args.spec.read_text())
     model_name = spec["name"]
+    backend = infer_backend(args.runtime, args.pte, args.out)
+    runtime_label = format_runtime_label(args.runtime, backend)
+    result_name = format_result_name(model_name, args.runtime, backend)
 
     if args.runtime == "pytorch":
         with suppress_stderr():
@@ -61,9 +65,7 @@ def main() -> None:
         if args.pte is None:
             raise ValueError("--pte is required for --runtime executorch")
         with suppress_stderr():
-            from executorch.extension.pybindings.portable_lib import _load_for_executorch
-
-            model = _load_for_executorch(str(args.pte))
+            model = load_executorch_program(args.pte)
             inputs = example_inputs(spec)
 
         def forward() -> object:
@@ -72,7 +74,7 @@ def main() -> None:
 
     times_ms, stats = benchmark(forward, warmups=args.warmups, runs=args.runs)
     plot_dir = args.plots or args.out.parent / "plots"
-    plot_paths = save_plots(times_ms, title=f"{model_name}_{args.runtime}", out_dir=plot_dir)
+    plot_paths = save_plots(times_ms, title=result_name, out_dir=plot_dir)
     write_results(
         out=args.out,
         runtime=args.runtime,
@@ -80,9 +82,15 @@ def main() -> None:
         warmups=args.warmups,
         times_ms=times_ms,
         stats=stats,
-        extra={"plots": [str(p) for p in plot_paths], "pte": str(args.pte) if args.pte else None},
+        extra={
+            "backend": backend,
+            "runtime_label": runtime_label,
+            "result_name": result_name,
+            "plots": [str(p) for p in plot_paths],
+            "pte": str(args.pte) if args.pte else None,
+        },
     )
-    print_stats(f"{model_name}_{args.runtime}", stats, warmups=args.warmups)
+    print_stats(result_name, stats, warmups=args.warmups)
     print(f"Wrote {args.out}")
 
 
@@ -107,6 +115,38 @@ def prepare_distilbert(spec: dict[str, Any]) -> tuple[Any, tuple[Any, ...]]:
     tokenizer = AutoTokenizer.from_pretrained(spec["model_id"], use_fast=True)
     model = load_hf_model(AutoModelForMaskedLM, spec["model_id"]).eval()
     return MaskLogits(model, tokenizer.mask_token_id).eval(), example_inputs(spec)
+
+
+def infer_backend(runtime: str, pte: Path | None, out: Path) -> str:
+    if runtime == "pytorch":
+        return "eager"
+
+    for path in (pte, out):
+        if path is None:
+            continue
+        name = path.stem.lower()
+        if name.endswith("_portable") or "_portable" in name:
+            return "portable"
+        if name.endswith("_xnnpack") or "_xnnpack" in name:
+            return "xnnpack"
+
+    return "executorch"
+
+
+def format_runtime_label(runtime: str, backend: str) -> str:
+    if runtime == "pytorch":
+        return "PyTorch eager"
+    if backend == "portable":
+        return "ExecuTorch portable"
+    if backend == "xnnpack":
+        return "ExecuTorch with XNNPACK"
+    return "ExecuTorch"
+
+
+def format_result_name(model_name: str, runtime: str, backend: str) -> str:
+    if runtime == "pytorch":
+        return f"{model_name}_pytorch"
+    return f"{model_name}_{backend}"
 
 
 if __name__ == "__main__":
