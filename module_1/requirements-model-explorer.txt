@@ -1,0 +1,4 @@
+# Optional Module 1 development-machine tooling for graph inspection.
+# Pinned to public PyPI releases for Python 3.11.14.
+ai-edge-model-explorer==0.1.32
+pte-adapter-model-explorer==0.1.2
