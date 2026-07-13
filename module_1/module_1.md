@@ -51,7 +51,7 @@ By the end of this module, you will have: 
 
 - used DistilBERT in an example autocomplete application
 
-- compared delegation behaviour across the two transformer models
+- compared delegation behavior across the two transformer models
 
 - used your evidence to decide when ExecuTorch is a suitable CPU
   deployment path
@@ -74,7 +74,7 @@ dependency footprint, and packaging constraints matter.
 **2. ExecuTorch packages PyTorch models for on-device inference**
 
 ExecuTorch, part of PyTorch, provides a deployment path for PyTorch models. It can export a model, lower it into an edge-oriented representation, and package it
-into a .pte artifact that can be loaded by a lightweight runtime.
+into a `.pte` artifact that can be loaded by a lightweight runtime.
 
 ExecuTorch is PyTorch-native. In this module, the model starts in PyTorch, is captured with `torch.export`, and is then lowered into an ExecuTorch program. We are not converting through ONNX, TensorFlow Lite, or another intermediate format.
 
@@ -225,7 +225,7 @@ git clone https://github.com/arm-education/executorch_on_arm_v2.git ~/executorch
 cd ~/executorch_on_arm
 ```
 
-Create a new Python 3.11 virtual environment and activate it. Install the pinned Module 1 Python dependencies. These include PyTorch, ExecuTorch, the HF transformers library, matplotlib and numpy for collecting data and plotting graphs, and huggingface_hub for interfacing with HF.
+Create a new Python 3.11 virtual environment with pyenv and activate it. Install the pinned Module 1 Python dependencies. These include PyTorch, ExecuTorch, the HF transformers library, matplotlib and numpy for collecting data and plotting graphs, and huggingface_hub for interfacing with HF.
 
 ```bash
 PYENV_VERSION=3.11.14 python -m venv .cpu_aot_venv
@@ -234,9 +234,9 @@ python --version
 python -m pip install -r module_1/requirements.txt
 ```
 
-Use Python 3.11 for this module. The ExecuTorch Python package includes native pybindings that must match the installed PyTorch build. A virtual environment created with a different Python version, such as Python 3.13, can install incompatible wheels and fail later when loading a `.pte`.
+Use Python 3.11.14 through pyenv for this module. The ExecuTorch Python package includes native pybindings that must match the installed PyTorch build. A virtual environment created with a different Python version, such as Python 3.13, can install incompatible wheels and fail later when loading a `.pte` artifact.
 
-The `PYENV_VERSION` prefix asks pyenv to use the installed Python 3.11.14 interpreter even if the generic `python3.11` command is not active in your shell. If you are not using pyenv and your system provides `python3.11`, use `python3.11 -m venv .cpu_aot_venv` instead of the first command above.
+The `PYENV_VERSION` prefix asks pyenv to use the installed Python 3.11.14 interpreter even if the generic `python3.11` command is not active in your shell.
 
 We will use HuggingFace to provide our models in this module. If you have not already got an account on HuggingFace, create one and generate an authentication key. Login to HuggingFace via terminal (see below), and when prompted, provide your authentication key:
 
@@ -274,7 +274,7 @@ The code is organized in three layers:
 ```text
 aot scripts                prepare/export/lower models on the development machine
 pi/benchmark_model.py      compare PyTorch and ExecuTorch on the Raspberry Pi
-pi/core                    load .pte programs and turn model outputs into app behavior
+pi/core                    load `.pte` artifacts and turn model outputs into app behavior
 _support                   shared setup, plotting, result writing, and HTML rendering
 ```
 
@@ -301,9 +301,10 @@ Why wrap the model? Transformer language models usually produce logits with shap
 
 - `V`: vocabulary size
 
-During training, logits for every token position are useful because loss is computed across the sequence. During generation, earlier tokens are already fixed. We only need the logits at the final position to choose the next token.
+During training, logits for every token position are useful because loss is computed across the sequence. During generation, earlier tokens are already fixed. We only need the logits at the final real token position to choose the next token.
 
 That is why the wrapper returns `[B, V]` instead of `[B, T, V]`. It keeps the output focused on what the text generation loop actually uses.
+The wrapper uses the attention mask to find the final non-padding token, so fixed-shape padded inputs still return logits for the prompt rather than logits for a padding position.
 
 The core of the script looks like this:
 
@@ -353,7 +354,7 @@ Here `1` is the batch size. The sequence is padded or truncated to 128 tokens. I
 
 ### 2. OPT-125M Lowering
 
-The preparation step produced an exported PyTorch program. The lowering step turns that exported program into a deployable ExecuTorch `.pte` file.
+The preparation step produced an exported PyTorch program. The lowering step turns that exported program into a deployable ExecuTorch `.pte` artifact.
 
 The `lower_to_executorch.py` script reads `model_spec.json`, finds the exported `.pt2` program, lowers it through ExecuTorch, writes the `.pte`, and saves a small JSON metadata file containing the output path, file size, backend name, and delegation summary.
 
@@ -490,7 +491,7 @@ Install Model Explorer and the Arm `.pte` adapter in your development machine en
 .cpu_aot_venv/bin/python -m pip install -r module_1/requirements-model-explorer.txt
 ```
 
-The PTE adapter is needed for ExecuTorch `.pte` files. The exported PyTorch program, `opt125m_exported.pt2`, can be opened by Model Explorer's built-in PyTorch exported program support.
+The PTE adapter is needed for ExecuTorch `.pte` artifacts. The exported PyTorch program, `opt125m_exported.pt2`, can be opened by Model Explorer's built-in PyTorch exported program support.
 
 Start Model Explorer with the PTE adapter enabled. Run the executable from the virtual environment explicitly, so your shell does not accidentally pick up a global `model-explorer` command:
 
@@ -525,7 +526,7 @@ In the portable view, look for:
 
 Those shape and layout operators are worth noticing. They are often cheap compared with the large matrix operations, but they can become boundaries around optimized backend regions.
 
-Now compare the XNNPACK `.pte` with the portable graph. The XNNPACK `.pte` should show delegated blocks, often named as `LoweredBackendModule`, `XnnpackBackend`, or XNNPACK backend regions depending on the adapter version.
+Now compare the ExecuTorch with XNNPACK `.pte` artifact with the portable graph. The ExecuTorch with XNNPACK `.pte` artifact should show delegated blocks, often named as `LoweredBackendModule`, `XnnpackBackend`, or XNNPACK backend regions depending on the adapter version.
 
 ![Model Explorer view of the XNNPACK-delegated OPT-125M ExecuTorch PTE.](images/opt125m-model-explorer-xnnpack-pte.png)
 
@@ -541,7 +542,7 @@ The main thing to notice is what changed between the three views:
 
 - the `.pt2` graph shows the exported PyTorch program before ExecuTorch lowering
 - the portable `.pte` shows the deployable ExecuTorch graph without backend delegation
-- the XNNPACK `.pte` shows which parts of the deployable graph were delegated and which operators still run on the default path
+- the ExecuTorch with XNNPACK `.pte` artifact shows which parts of the deployable graph were delegated and which operators still run on the default path
 
 For OPT-125M, expect the XNNPACK graph to be mixed rather than perfectly clean. Transformer decoder graphs contain masking, reshapes, layout changes, normalization, and indexing-style operations around the expensive matrix work. Those operators can break the graph into several delegated regions with default-path operators in between.
 
@@ -560,7 +561,7 @@ This is the key difference: XNNPACK does not replace the whole `.pte`. It captur
 
 Run the next steps on the Raspberry Pi unless told otherwise - you are recommended to SSH into your Pi from your development machine.
 
-If connecting over SSH, do so whilst also port-forwarding specific ports we will use for application demos:
+If connecting over SSH, do so while also port-forwarding specific ports we will use for application demos:
 
 ```bash
 ssh -L 8080:localhost:8080 -L 8090:localhost:8090 -L 8091:localhost:8091 <user>@<pi>
@@ -584,7 +585,7 @@ git clone https://github.com/arm-education/executorch_on_arm_v2.git ~/executorch
 cd ~/executorch_on_arm
 ```
 
-We repeat our setup and installation from earlier, keeping the Pi virtual
+We repeat our pyenv setup and installation from earlier, keeping the Pi virtual
 environment inside `~/executorch_on_arm` with the scripts, artifacts, and
 results:
 
@@ -596,8 +597,6 @@ python -m pip install -r module_1/requirements.txt
 hf auth login
 ```
 
-If your Pi does not use pyenv but has a system `python3.11` command, replace the first command above with `python3.11 -m venv ~/executorch_on_arm/.cpu_lab_venv`.
-
 ### 5. Copy OPT Artifacts to Raspberry Pi
 
 Run on your development machine to copy your model artifacts over to the target Pi:
@@ -608,7 +607,7 @@ ssh <user>@<pi> "mkdir -p ~/executorch_on_arm/module_1/artifacts"
 scp -r module_1/artifacts/opt125m <user>@<pi>:~/executorch_on_arm/module_1/artifacts/
 ```
 
-Copies the OPT spec, `.pte` files, and metadata to the Pi - note, it may take a few minutes to copy over the files as they are large.
+Copies the OPT spec, `.pte` artifacts, and metadata to the Pi - note, it may take a few minutes to copy over the files as they are large.
 
 ### 6. OPT Benchmark on Raspberry Pi
 
@@ -644,7 +643,7 @@ def forward() -> object:
         return module(*inputs)
 ```
 
-The ExecuTorch branch is different. It loads a `.pte` file with the ExecuTorch Python bindings, creates the same fixed-shape input tensors, and calls the model through the ExecuTorch runtime:
+The ExecuTorch branch is different. It loads a `.pte` artifact with the ExecuTorch Python bindings, creates the same fixed-shape input tensors, and calls the model through the ExecuTorch runtime:
 
 ```python
 with suppress_stderr():
@@ -673,7 +672,7 @@ for i in range(runs):
 
 We will use two warmup runs for PyTorch and XNNPACK, to give the runtime a chance to pay one-time costs before timing starts. That can include loading code paths, allocating internal buffers, and filling CPU caches. We will then use 20 measured runs to give a small latency distribution rather than a single number, so we can compare the mean, median, and spread.
 
-Finally, the script writes a summary JSON and a per-run CSV file. For PyTorch and XNNPACK runs, it also writes two plots: a latency histogram and a run-by-run time series. The JSON is useful for comparing mean, median, minimum, maximum, and percentile latency later in the results dashboard.
+Finally, the script writes a summary JSON and a per-run CSV file. For PyTorch and ExecuTorch with XNNPACK runs, it also writes two plots: a latency histogram and a run-by-run time series. The JSON is useful for comparing mean, median, minimum, maximum, and percentile latency later in the results dashboard.
 
 Run on the Raspberry Pi from the repo root:
 
@@ -696,6 +695,7 @@ The portable run will use `--warmups 1 --runs 1`, to avoid spending an excessive
 ```bash
 module_1/scripts/pi/benchmark_model.py \
   --runtime executorch \
+  --backend portable \
   --spec ~/executorch_on_arm/module_1/artifacts/opt125m/model_spec.json \
   --pte ~/executorch_on_arm/module_1/artifacts/opt125m/opt125m_portable.pte \
   --runs 1 \
@@ -708,11 +708,12 @@ Writes JSON/CSV results to `~/executorch_on_arm/module_1/results`. The dashboard
 
 The increased latency does not make the portable path useless. It gives us a deployable baseline and a compact `.pte` artifact. On smaller targets, deployability and runtime footprint may matter as much as raw latency.
 
-We will now run the XNNPACK ExecuTorch path, with 2 warmups and 20 measured runs:
+We will now run the ExecuTorch with XNNPACK path, with 2 warmups and 20 measured runs:
 
 ```bash
 module_1/scripts/pi/benchmark_model.py \
   --runtime executorch \
+  --backend xnnpack \
   --spec ~/executorch_on_arm/module_1/artifacts/opt125m/model_spec.json \
   --pte ~/executorch_on_arm/module_1/artifacts/opt125m/opt125m_xnnpack.pte \
   --runs 20 \
@@ -720,7 +721,7 @@ module_1/scripts/pi/benchmark_model.py \
   --out ~/executorch_on_arm/module_1/results/opt125m_xnnpack.json
 ```
 
-Benchmarks the OPT XNNPACK `.pte`.
+Benchmarks the OPT ExecuTorch with XNNPACK `.pte` artifact.
 Writes JSON/CSV results to `~/executorch_on_arm/module_1/results` and plots to `~/executorch_on_arm/module_1/results/plots`.
 
 ### 7. View the OPT Benchmark Results
@@ -746,17 +747,17 @@ Then open the dashboard locally on your development machine:
 http://localhost:8080
 ```
 
-Because only the OPT benchmark files have been generated so far, the dashboard should show the PyTorch, portable ExecuTorch, and XNNPACK ExecuTorch runs for OPT-125M. Later, after the DistilBERT benchmarks, the same dashboard will include both models.
+Because only the OPT benchmark files have been generated so far, the dashboard should show the PyTorch, portable ExecuTorch, and ExecuTorch with XNNPACK runs for OPT-125M. Later, after the DistilBERT benchmarks, the same dashboard will include both models.
 
 The dashboard table summarizes the run count and latency statistics for each runtime:
 
 ![OPT-125M benchmark results summary in the browser dashboard.](images/opt125m-results-dashboard-summary.png)
 
-Read the table and plots together. The table includes PyTorch, portable ExecuTorch, and XNNPACK. The plots are shown for PyTorch and XNNPACK only, where repeated runs make a histogram and time series meaningful. The mean and median show typical latency. The minimum and maximum show how much the run varied. The histogram shows whether most timings are clustered or spread out, and the run-by-run plot can reveal drift from system load, CPU frequency changes, or thermal effects.
+Read the table and plots together. The table includes PyTorch, portable ExecuTorch, and ExecuTorch with XNNPACK. The plots are shown for PyTorch and ExecuTorch with XNNPACK only, where repeated runs make a histogram and time series meaningful. The mean and median show typical latency. The minimum and maximum show how much the run varied. The histogram shows whether most timings are clustered or spread out, and the run-by-run plot can reveal drift from system load, CPU frequency changes, or thermal effects.
 
-The plot section shows the PyTorch and XNNPACK latency distributions and run-by-run timing:
+The plot section shows the PyTorch and ExecuTorch with XNNPACK latency distributions and run-by-run timing:
 
-![OPT-125M PyTorch and XNNPACK benchmark plots in the browser dashboard.](images/opt125m-results-dashboard-plots.png)
+![OPT-125M PyTorch and ExecuTorch with XNNPACK benchmark plots in the browser dashboard.](images/opt125m-results-dashboard-plots.png)
 
 For one Raspberry Pi run with the pinned Module 1 environment, the OPT benchmark reported:
 
@@ -770,7 +771,7 @@ The portable ExecuTorch result is a single measured run, so treat it as a baseli
 
 The XNNPACK result is the main comparison. In this run, XNNPACK reduced mean latency from 488.90 ms to 301.44 ms compared with PyTorch eager execution, about a 1.6x speedup and about 38% lower mean latency. The median tells the same story: 491.19 ms for PyTorch eager compared with 300.87 ms for XNNPACK.
 
-Now connect that timing back to the lowering evidence. The XNNPACK `.pte` was larger than the portable `.pte`, and the graph still had 50 XNNPACK delegate call sites plus 632 fallback `call_function` operators, but the delegated regions captured enough expensive transformer work to outweigh the backend boundary costs. This is the deployment trade-off in miniature: a larger delegated artifact, but substantially lower CPU latency on this target.
+Now connect that timing back to the lowering evidence. The ExecuTorch with XNNPACK `.pte` artifact was larger than the portable `.pte` artifact, and the graph still had 50 XNNPACK delegate call sites plus 632 fallback `call_function` operators, but the delegated regions captured enough expensive transformer work to outweigh the backend boundary costs. This is the deployment trade-off in miniature: a larger delegated artifact, but substantially lower CPU latency on this target.
 
 For OPT, compare the timing with the lowering evidence. If portable ExecuTorch is slower than PyTorch eager, that is expected for this baseline: the portable path is optimized for operator coverage and deployability, not peak CPU performance. If XNNPACK is faster, look back at the delegation summary and Model Explorer view to see whether large linear and matmul-heavy regions were delegated. If XNNPACK is only a little faster, or not faster, that is also useful evidence. It may mean the graph was fragmented by fallback operators, or that runtime transitions between delegated and non-delegated regions ate into the backend gains.
 
@@ -778,7 +779,7 @@ The point is not just to crown the fastest runtime. The benchmark should help ex
 
 ### 8. Run the OPT Chatbot Demo
 
-The benchmark measured one fixed forward pass. The OPT demo shows how the same XNNPACK `.pte` can be integrated into a small application loop.
+The benchmark measured one fixed forward pass. The OPT demo shows how the same ExecuTorch with XNNPACK `.pte` artifact can be integrated into a small application loop.
 
 Run on the Raspberry Pi:
 
@@ -796,11 +797,13 @@ Then open:
 http://localhost:8090
 ```
 
-Try out the application: TODO IMAGE HERE
+Try out the application by entering a prompt and generating text. The timing panel reports the end-to-end request time, first-token latency, average decode-step time, token rate, generated token count, and total model-forward time.
+
+![OPT-125M ExecuTorch chatbot demo running from the Raspberry Pi.](images/opt125m-chatbot-demo.png)
 
 The serving script is mostly HTTP plumbing. The ExecuTorch-specific application logic is in `module_1/scripts/pi/core/opt_chat_core.py`.
 
-First, the app loads the tokenizer and the lowered `.pte` program:
+First, the app loads the tokenizer and the lowered `.pte` artifact:
 
 ```python
 from _support.common import load_executorch_program
@@ -940,11 +943,9 @@ In the browser UI, select these three files from your machine and open them:
 - `module_1/artifacts/distilbert/distilbert_fillmask_portable.pte`
 - `module_1/artifacts/distilbert/distilbert_fillmask_xnnpack.pte`
 
-TODO MODEL EXPLORER IMAGES HERE
-
 Use the `.pt2` graph as the pre-lowering reference. You should see the same two input names, but the fixed sequence length is `[1, 64]` rather than `[1, 128]`.
 
-Then compare the portable and XNNPACK `.pte` graphs. The useful questions are the same as before, but the expected differences are model-specific:
+Then compare the portable and ExecuTorch with XNNPACK `.pte` artifact graphs. The useful questions are the same as before, but the expected differences are model-specific:
 
 - Does the XNNPACK graph have fewer or larger delegate regions than OPT?
 - Which operators still fall back to the default ExecuTorch path?
@@ -962,7 +963,7 @@ ssh <user>@<pi> "mkdir -p ~/executorch_on_arm/module_1/artifacts"
 scp -r module_1/artifacts/distilbert <user>@<pi>:~/executorch_on_arm/module_1/artifacts/
 ```
 
-Copies the DistilBERT spec, `.pte` files, and metadata to the Pi. This should be quicker than copying OPT, but still give it a minute or two.
+Copies the DistilBERT spec, `.pte` artifacts, and metadata to the Pi. This should be quicker than copying OPT, but still give it a minute or two.
 
 ### 5. DistilBERT Benchmark on Raspberry Pi
 
@@ -983,6 +984,7 @@ Writes JSON/CSV results to `~/executorch_on_arm/module_1/results` and plots to `
 ```bash
 module_1/scripts/pi/benchmark_model.py \
   --runtime executorch \
+  --backend portable \
   --spec ~/executorch_on_arm/module_1/artifacts/distilbert/model_spec.json \
   --pte ~/executorch_on_arm/module_1/artifacts/distilbert/distilbert_fillmask_portable.pte \
   --runs 1 \
@@ -995,6 +997,7 @@ Runs the portable ExecuTorch DistilBERT path once. This mirrors the OPT baseline
 ```bash
 module_1/scripts/pi/benchmark_model.py \
   --runtime executorch \
+  --backend xnnpack \
   --spec ~/executorch_on_arm/module_1/artifacts/distilbert/model_spec.json \
   --pte ~/executorch_on_arm/module_1/artifacts/distilbert/distilbert_fillmask_xnnpack.pte \
   --runs 20 \
@@ -1002,7 +1005,7 @@ module_1/scripts/pi/benchmark_model.py \
   --out ~/executorch_on_arm/module_1/results/distilbert_xnnpack.json
 ```
 
-Benchmarks the DistilBERT XNNPACK `.pte`.
+Benchmarks the DistilBERT ExecuTorch with XNNPACK `.pte` artifact.
 Writes JSON/CSV results to `~/executorch_on_arm/module_1/results` and plots to `~/executorch_on_arm/module_1/results/plots`.
 
 ### 6. View the DistilBERT Benchmark Results
@@ -1030,13 +1033,33 @@ Open the same local URL on your development machine:
 http://localhost:8080
 ```
 
-TODO RESULTS IMAGE HERE
+The dashboard table now includes the DistilBERT PyTorch, portable ExecuTorch, and ExecuTorch with XNNPACK runs:
 
-Read the DistilBERT results in two ways. First, compare PyTorch, portable ExecuTorch, and XNNPACK for DistilBERT itself. Portable ExecuTorch is still a deployable baseline, and XNNPACK is the optimized CPU path. Second, compare the pattern with OPT: did DistilBERT delegate more cleanly, and does the timing reflect that?
+![DistilBERT benchmark results summary in the browser dashboard.](images/distilbert-results-dashboard-summary.png)
+
+The plot section shows the DistilBERT PyTorch and ExecuTorch with XNNPACK latency distributions and run-by-run timing:
+
+![DistilBERT PyTorch and ExecuTorch with XNNPACK benchmark plots in the browser dashboard.](images/distilbert-results-dashboard-plots.png)
+
+For one Raspberry Pi run with the pinned Module 1 environment, the DistilBERT benchmark reported:
+
+| Runtime | Warmups | Runs | Mean | Median | Min | Max |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| PyTorch eager | 2 | 20 | 190.75 ms | 190.59 ms | 188.59 ms | 193.06 ms |
+| ExecuTorch portable | 1 | 1 | 20,699.95 ms | 20,699.95 ms | 20,699.95 ms | 20,699.95 ms |
+| ExecuTorch with XNNPACK | 2 | 20 | 80.94 ms | 80.82 ms | 80.43 ms | 82.45 ms |
+
+The portable ExecuTorch result is again a single measured run. At 20,699.95 ms, it took about 20.7 seconds for one forward pass. That confirms the portable `.pte` executes on the Pi, but it is not a practical latency path for this DistilBERT workload.
+
+The XNNPACK result is the important runtime comparison. In this run, XNNPACK reduced mean latency from 190.75 ms to 80.94 ms compared with PyTorch eager execution, about a 2.4x speedup and about 58% lower mean latency. The median follows the same pattern: 190.59 ms for PyTorch eager compared with 80.82 ms for XNNPACK.
+
+The repeated XNNPACK timings are also tightly clustered: the measured range is 80.43 ms to 82.45 ms. That suggests the delegated DistilBERT forward pass is not only faster than PyTorch eager in this run, but also stable for this fixed input shape on the Pi.
+
+Read the DistilBERT results in two ways. First, compare PyTorch, portable ExecuTorch, and ExecuTorch with XNNPACK for DistilBERT itself. Portable ExecuTorch is still a deployable baseline, and ExecuTorch with XNNPACK is the optimized CPU path. Second, compare the pattern with OPT: did DistilBERT delegate more cleanly, and does the timing reflect that?
 
 Be careful with raw model-to-model comparisons. DistilBERT and OPT have different sequence lengths, vocabulary sizes, tasks, and graph structures. The useful comparison is not "which model is faster?" but "does each model's delegation pattern explain its own runtime behavior?"
 
-For DistilBERT, expect the benchmark to feel more like a single request/response workload. There is no autoregressive generation loop, so the measured forward pass is closer to the way the autocomplete demo uses the model. If XNNPACK is faster, check whether Model Explorer shows useful delegated regions around the encoder's linear and attention work. If the gain is small, look for fallback operators or fragmented regions around shape, mask, or normalization operations.
+For DistilBERT, expect the benchmark to feel more like a single request/response workload. There is no autoregressive generation loop, so the measured forward pass is closer to the way the autocomplete demo uses the model. In this run, XNNPACK is substantially faster, so check whether Model Explorer shows useful delegated regions around the encoder's linear and attention work. If your own gain is smaller, look for fallback operators or fragmented regions around shape, mask, or normalization operations.
 
 ### 7. Run the DistilBERT Autocomplete Demo
 
@@ -1058,7 +1081,9 @@ Then open:
 http://localhost:8091
 ```
 
-Try out the application: TODO IMAGE HERE
+Try out the application by typing a short sentence. The demo inserts one mask token, runs the ExecuTorch with XNNPACK `.pte` artifact, and refreshes the ranked suggestions as the sentence changes.
+
+![DistilBERT ExecuTorch autocomplete demo running from the Raspberry Pi.](images/distilbert-autocomplete-demo.png)
 
 The serving script is mostly HTTP plumbing. The fill-mask runtime logic is in `module_1/scripts/pi/core/distilbert_autocomplete_core.py`.
 
@@ -1185,6 +1210,9 @@ In the final OPT-125M run, portable ExecuTorch took 64,372.10 ms for one
 measured forward pass, while PyTorch eager averaged 488.90 ms over 20
 runs. That is not a small tuning difference; it is evidence that this
 particular transformer workload needs an optimized CPU path on the Pi.
+DistilBERT showed the same pattern at a smaller scale: portable
+ExecuTorch took 20,699.95 ms for one measured forward pass, while
+PyTorch eager averaged 190.75 ms.
 
 The portable path uses broadly compatible operator implementations. This
 makes it useful as a deployment path, but it is not necessarily the
@@ -1229,6 +1257,11 @@ For OPT-125M, XNNPACK lowered the mean latency to 301.44 ms compared
 with 488.90 ms for PyTorch eager. That is the key evidence that
 delegation captured enough expensive work to matter on this target,
 despite the graph still containing fallback operators.
+
+For DistilBERT, XNNPACK lowered the mean latency to 80.94 ms compared
+with 190.75 ms for PyTorch eager. That is about a 2.4x speedup, and it
+is stronger evidence that this encoder workload benefits from backend
+delegation on the Pi.
 
 However, delegate call count alone is not enough. You also need to
 consider:
@@ -1277,6 +1310,14 @@ DistilBERT is encoder-only and is used for prediction-style workloads
 such as fill-mask, classification, ranking, or intent detection. These
 workloads often require a single forward pass over a fixed input, which
 can make them more practical for edge CPU deployment.
+
+The final benchmark numbers reinforce that workload difference. The
+The DistilBERT ExecuTorch with XNNPACK path measured 80.94 ms for one fixed forward pass,
+which is a much more natural fit for a request/response autocomplete
+interaction. Do not read that as "DistilBERT is always faster than OPT";
+the models have different tasks and graph shapes. Read it as evidence
+that encoder-style prediction workloads can be easier to make responsive
+on a CPU-only edge target.
 
 The practical takeaway is:
 
@@ -1356,7 +1397,7 @@ path is most appropriate:
 | You are developing, debugging, or experimenting on a powerful system | PyTorch | Maximum flexibility and familiar tooling |
 | The target can support the full PyTorch stack and latency is acceptable | PyTorch may be sufficient | Deployment constraints are not forcing a lighter runtime |
 | The target cannot support full PyTorch because of footprint or dependencies | ExecuTorch portable | Smaller deployable artifact and lightweight runtime |
-| The target is CPU-only and latency matters | ExecuTorch + XNNPACK | Optimized backend kernels can improve supported operations |
+| The target is CPU-only and latency matters | ExecuTorch with XNNPACK | Optimized backend kernels can improve supported operations |
 | The workload delegates poorly and has a strict latency target | Reconsider the model, backend, or target | Runtime choice cannot rescue a poor model-task-device fit |
 | The workload is encoder-style classification or intent detection | Often more edge-suitable | Usually simpler than autoregressive generation |
 | The workload is open-ended generation | Treat carefully | Repeated token generation can be costly on constrained CPUs |
@@ -1368,7 +1409,7 @@ A strong deployment conclusion should not simply say:
 A stronger conclusion would be:
 
 > “ExecuTorch with XNNPACK is a good candidate for this CPU-only target
-> because it generated a compact .pte artifact, delegated the expensive
+> because it generated a compact `.pte` artifact, delegated the expensive
 > parts of the graph, and improved latency enough for the application.
 > Before production, I would validate memory use, power, and latency on
 > the actual target device.”
@@ -1381,7 +1422,7 @@ optimization is critical for transformer edge deployment on CPU? 
 
 A.  XNNPACK delegation significantly reduced inference latency
 
-B.  Portable ExecuTorch export produced a smaller .pte file
+B.  Portable ExecuTorch export produced a smaller `.pte` artifact
 
 C.  PyTorch eager execution completed successfully
 

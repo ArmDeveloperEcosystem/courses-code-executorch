@@ -69,7 +69,8 @@ class OptChatRunner:
             in_mask = attention_mask[:, -ctx:]
             if in_ids.shape[1] < ctx:
                 pad = ctx - in_ids.shape[1]
-                in_ids = torch.cat([torch.zeros((1, pad), dtype=in_ids.dtype), in_ids], dim=1)
+                pad_ids = torch.full((1, pad), int(self.tokenizer.pad_token_id), dtype=in_ids.dtype)
+                in_ids = torch.cat([pad_ids, in_ids], dim=1)
                 in_mask = torch.cat([torch.zeros((1, pad), dtype=in_mask.dtype), in_mask], dim=1)
 
             step_started = time.perf_counter()

@@ -100,8 +100,7 @@ def load_executorch_program(pte_path: Path | str) -> Any:
             "venv was created with Python 3.13, remove it and recreate it with "
             "`PYENV_VERSION=3.11.14 python -m venv "
             "~/executorch_on_arm/.cpu_lab_venv`, then reinstall "
-            "`module_1/requirements.txt`. If you are not using pyenv, use your "
-            "system Python 3.11 command instead.\n\n"
+            "`module_1/requirements.txt`.\n\n"
             f"Python: {sys.version.split()[0]}\n"
             f"torch: {installed_version('torch')}\n"
             f"executorch: {installed_version('executorch')}\n"
@@ -131,7 +130,10 @@ class LastTokenLogits:
 
             def forward(self, input_ids: Any, attention_mask: Any) -> Any:
                 out = self.wrapped(input_ids=input_ids, attention_mask=attention_mask, use_cache=False)
-                return out.logits[:, -1, :]
+                positions = torch.arange(out.logits.shape[1], device=out.logits.device)
+                last_token_pos = (attention_mask.to(torch.int64) * positions).amax(dim=1)
+                batch = torch.arange(input_ids.shape[0], device=input_ids.device)
+                return out.logits[batch, last_token_pos, :]
 
         return _LastTokenLogits(model)
 

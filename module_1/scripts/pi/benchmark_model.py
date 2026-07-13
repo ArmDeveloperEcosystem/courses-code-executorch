@@ -28,6 +28,7 @@ from _support.common import (
 def main() -> None:
     parser = argparse.ArgumentParser(description="Benchmark PyTorch or ExecuTorch on the Pi.")
     parser.add_argument("--runtime", choices=["pytorch", "executorch"], required=True)
+    parser.add_argument("--backend", choices=["portable", "xnnpack"], default=None)
     parser.add_argument("--spec", type=Path, required=True)
     parser.add_argument("--pte", type=Path, default=None)
     parser.add_argument("--runs", type=int, default=20)
@@ -49,7 +50,12 @@ def main() -> None:
 
     spec = json.loads(args.spec.read_text())
     model_name = spec["name"]
-    backend = infer_backend(args.runtime, args.pte, args.out)
+    if args.runtime == "pytorch":
+        if args.backend is not None:
+            raise ValueError("--backend is only valid for --runtime executorch")
+        backend = "eager"
+    else:
+        backend = args.backend or infer_backend(args.runtime, args.pte, args.out)
     runtime_label = format_runtime_label(args.runtime, backend)
     result_name = format_result_name(model_name, args.runtime, backend)
 

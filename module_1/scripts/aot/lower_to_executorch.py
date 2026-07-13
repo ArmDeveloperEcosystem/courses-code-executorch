@@ -17,7 +17,7 @@ from _support.common import configure_quiet_output
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Load an exported program, lower it, and write an ExecuTorch .pte.")
+    parser = argparse.ArgumentParser(description="Load an exported program, lower it, and write an ExecuTorch .pte artifact.")
     parser.add_argument("--spec", type=Path, required=True, help="Path to model_spec.json.")
     parser.add_argument("--backend", choices=["portable", "xnnpack"], required=True)
     parser.add_argument(
