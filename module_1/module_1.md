@@ -673,7 +673,7 @@ for i in range(runs):
 
 We will use two warmup runs for PyTorch and XNNPACK, to give the runtime a chance to pay one-time costs before timing starts. That can include loading code paths, allocating internal buffers, and filling CPU caches. We will then use 20 measured runs to give a small latency distribution rather than a single number, so we can compare the mean, median, and spread.
 
-Finally, the script writes a summary JSON, a per-run CSV file, and two plots: a latency histogram and a run-by-run time series. The JSON is useful for comparing mean, median, minimum, maximum, and percentile latency later in the results dashboard.
+Finally, the script writes a summary JSON and a per-run CSV file. For PyTorch and XNNPACK runs, it also writes two plots: a latency histogram and a run-by-run time series. The JSON is useful for comparing mean, median, minimum, maximum, and percentile latency later in the results dashboard.
 
 Run on the Raspberry Pi from the repo root:
 
@@ -704,7 +704,7 @@ module_1/scripts/pi/benchmark_model.py \
 ```
 
 Runs the portable ExecuTorch OPT path once.
-Writes JSON/CSV results to `~/executorch_on_arm/module_1/results` and plots to `~/executorch_on_arm/module_1/results/plots`.
+Writes JSON/CSV results to `~/executorch_on_arm/module_1/results`. The dashboard table includes this portable result, but it does not show a histogram or time series for the one-sample portable run.
 
 The increased latency does not make the portable path useless. It gives us a deployable baseline and a compact `.pte` artifact. On smaller targets, deployability and runtime footprint may matter as much as raw latency.
 
@@ -750,7 +750,7 @@ TODO RESULTS IMAGE HERE
 
 Because only the OPT benchmark files have been generated so far, the dashboard should show the PyTorch, portable ExecuTorch, and XNNPACK ExecuTorch runs for OPT-125M. Later, after the DistilBERT benchmarks, the same dashboard will include both models.
 
-Read the table and plots together. The mean and median show typical latency. The minimum and maximum show how much the run varied. The histogram shows whether most timings are clustered or spread out, and the run-by-run plot can reveal drift from system load, CPU frequency changes, or thermal effects.
+Read the table and plots together. The table includes PyTorch, portable ExecuTorch, and XNNPACK. The plots are shown for PyTorch and XNNPACK only, where repeated runs make a histogram and time series meaningful. The mean and median show typical latency. The minimum and maximum show how much the run varied. The histogram shows whether most timings are clustered or spread out, and the run-by-run plot can reveal drift from system load, CPU frequency changes, or thermal effects.
 
 For one Raspberry Pi run with the pinned Module 1 environment, the OPT benchmark reported:
 
@@ -984,7 +984,7 @@ module_1/scripts/pi/benchmark_model.py \
   --out ~/executorch_on_arm/module_1/results/distilbert_portable.json
 ```
 
-Runs the portable ExecuTorch DistilBERT path once. This mirrors the OPT baseline: enough to confirm the deployable portable path without spending a long time on repeated portable runs.
+Runs the portable ExecuTorch DistilBERT path once. This mirrors the OPT baseline: enough to confirm the deployable portable path without spending a long time on repeated portable runs. The dashboard table includes this result, but skips the one-sample portable plots.
 
 ```bash
 module_1/scripts/pi/benchmark_model.py \

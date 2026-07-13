@@ -43,6 +43,7 @@ def main() -> None:
 
 
 def render_dashboard(results_dir: Path) -> str:
+    results_dir = results_dir.expanduser().resolve()
     entries = []
     for path in sorted(results_dir.glob("*.json")):
         payload = json.loads(path.read_text())
@@ -69,6 +70,8 @@ def render_dashboard(results_dir: Path) -> str:
             f"<td>{format_ms(stats, 'max_ms')}</td>"
             "</tr>"
         )
+        if extra["backend"] == "portable":
+            continue
         for plot in extra["plots"]:
             plot_path = Path(plot)
             try:
