@@ -1,13 +1,13 @@
 from __future__ import annotations
 
+from contextlib import contextmanager
 import csv
 import json
+import os
 import platform
 import time
 from pathlib import Path
-from typing import Callable
-
-from _support.common import suppress_stderr
+from typing import Callable, Iterator
 
 
 def benchmark(fn: Callable[[], object], *, warmups: int, runs: int) -> tuple[list[float], dict[str, float | int]]:
@@ -119,3 +119,16 @@ def print_stats(name: str, stats: dict[str, float | int], *, warmups: int) -> No
     print(f"Median:  {stats['median_ms']:.2f} ms")
     print(f"Min:     {stats['min_ms']:.2f} ms")
     print(f"Max:     {stats['max_ms']:.2f} ms")
+
+
+@contextmanager
+def suppress_stderr() -> Iterator[None]:
+    saved_stderr = os.dup(2)
+    devnull = os.open(os.devnull, os.O_WRONLY)
+    try:
+        os.dup2(devnull, 2)
+        yield
+    finally:
+        os.dup2(saved_stderr, 2)
+        os.close(saved_stderr)
+        os.close(devnull)

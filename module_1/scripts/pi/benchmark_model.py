@@ -8,11 +8,13 @@ import sys
 from typing import Any
 
 
+REPO_ROOT = Path(__file__).resolve().parents[3]
 MODULE1_SCRIPTS = Path(__file__).resolve().parents[1]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
 if str(MODULE1_SCRIPTS) not in sys.path:
     sys.path.insert(0, str(MODULE1_SCRIPTS))
 
-from _support.benchmarking import benchmark, print_stats, save_plots, write_results
 from _support.common import (
     LastTokenLogits,
     MaskLogits,
@@ -23,6 +25,7 @@ from _support.common import (
     quiet_transformers_progress,
     suppress_stderr,
 )
+from shared.benchmarking import benchmark, print_stats, save_plots, write_results
 
 
 def main() -> None:
