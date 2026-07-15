@@ -293,6 +293,12 @@ First, we create a clean exported program that ExecuTorch can lower in the next 
 
 The `prepare_opt125m.py` script loads the tokenizer and OPT-125M model from Hugging Face, wraps the model, creates one fixed-shape example input, exports the model with `torch.export`, and writes a small `model_spec.json`.
 
+`model_spec.json` is a course-specific manifest used by these scripts.
+ExecuTorch does not require this file. We use it to keep the model name,
+exported program path, `.pte` artifact names, input shapes, tokenizer details,
+and example inputs in one place so the preparation, lowering, benchmarking,
+and demo scripts all use the same settings.
+
 Why wrap the model? Transformer language models usually produce logits with shape `[B, T, V]`:
 
 - `B`: batch size
