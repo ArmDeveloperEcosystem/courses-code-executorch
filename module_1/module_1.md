@@ -119,12 +119,21 @@ It is useful to separate two ideas:
   unsupported operators on the default ExecuTorch path.
 
 This module uses the portable kernel path as the baseline and XNNPACK as
-the optimized CPU path. We do not use the Optimized Kernel Library here
-because the module is focused on backend delegation: exporting a model,
-partitioning supported subgraphs with XNNPACK, inspecting the delegated
-regions, and comparing the resulting `.pte` artifacts. Using the
-Optimized Kernel Library is a lower-level runtime configuration topic,
-not a `--backend` option in this lab's lowering script.
+the optimized CPU path. We use XNNPACK here because it is visible in the
+AOT workflow: you can lower with `XnnpackPartitioner`, inspect delegated
+regions in Model Explorer, and compare the resulting `.pte` artifacts.
+That makes XNNPACK the right abstraction for learning how backend
+delegation affects a deployed ExecuTorch program.
+
+The Optimized Kernel Library is useful in a different situation: when
+operators that remain on the default ExecuTorch path are important
+runtime bottlenecks. In that case, a production application may choose
+faster CPU implementations for selected ATen operators while still
+keeping portable kernels available for broader fallback coverage. Using
+the Optimized Kernel Library is a lower-level runtime integration topic,
+not a `--backend` option in this lab's lowering script. The application
+runtime must link the relevant kernel libraries and register the
+operator implementations required by the `.pte` program.
 
 Backends provide implementations for particular hardware targets, such
 as CPUs or NPUs. That is why you will compare portable ExecuTorch with
@@ -285,9 +294,21 @@ moving repeated utilities out of the main path.
 
 ## OPT-125M
 
+OPT-125M is the 125-million-parameter member of Meta's Open Pre-trained
+Transformer (OPT) family. It is a decoder-only causal language model: given a
+prompt, it predicts the next token, then the application can append that
+token and run the model again to generate more text.
+
+OPT-125M is small by LLM standards, which makes it practical for this
+module, but it still has the graph shape of a text-generation model:
+token embeddings, attention blocks, feed-forward layers, normalization,
+causal masking, and a repeated decode loop. That makes it a useful model
+for studying what ExecuTorch export, lowering, and XNNPACK delegation do
+to an autoregressive transformer on an Arm CPU.
+
 ### 1. OPT-125M Preparation and Export
 
-We’ll compare a PyTorch eager baseline against ExecuTorch with no XNNPACK backend and ExecuTorch with the XNNPACK delegate for the OPT-125m model (Open Pre-Trained Transformers) from Meta. Do you have any expectations, perhaps from any prior ML knowledge, about which of the three will have the best performance, and which you expect to have the worst? 
+We’ll compare a PyTorch eager baseline against ExecuTorch with no XNNPACK backend and ExecuTorch with the XNNPACK delegate. Do you have any expectations, perhaps from any prior ML knowledge, about which of the three will have the best performance, and which you expect to have the worst?
 
 First, we create a clean exported program that ExecuTorch can lower in the next step.
 
@@ -847,15 +868,84 @@ The demo takes longer than the benchmark because the benchmark measures one fixe
 
 You could implement a KV cache yourself, and production text-generation systems normally do. Instead of recomputing attention over the whole context on every step, the app stores the previous key/value tensors and feeds them back into the model for the next token. That is much faster for longer generations, but it also changes the model interface: the exported program needs cache inputs and cache outputs, the app has to manage cache tensor shapes and positions, and the benchmark needs to measure a different decode path. We are not covering that in this module because the goal here is to understand export, lowering, delegation, and basic ExecuTorch app integration first.
 
+### 9. (Optional) Learn Where LLM-Specific Tooling Fits
+
+The OPT-125M exercise built a decoder model path by hand. That made the
+pieces visible: `torch.export`, fixed-shape inputs, portable lowering,
+XNNPACK delegation, fallback operators, and a simple generation loop.
+
+Real LLM deployment usually needs more than the `.pte` artifact used in
+the simple OPT example. A packaged LLM path also has to account for:
+
+- tokenizer files and vocabulary metadata
+- beginning-of-sequence and end-of-sequence token IDs
+- maximum sequence length
+- KV cache inputs and outputs for faster token-by-token generation
+- generation settings such as sampling and stopping behavior
+- optional quantization choices for weights, embeddings, and linear layers
+
+ExecuTorch provides LLM-focused tooling for this. The two main entry
+points to read about next are:
+
+- **[`export_llm`](https://docs.pytorch.org/executorch/stable/llm/export-llm.html)**:
+  ExecuTorch's native LLM export API for optimized model families such
+  as Llama, Qwen, Phi, and SmolLM2.
+- **[Optimum ExecuTorch](https://docs.pytorch.org/executorch/stable/llm/export-llm-optimum.html)**:
+  the Hugging Face-oriented path, including
+  `optimum-cli export executorch` and Python helpers for exported model
+  packages.
+
+For example, an Optimum ExecuTorch export command can select the model,
+task, backend recipe, KV cache behavior, quantization settings, and
+maximum sequence length:
+
+```bash
+optimum-cli export executorch \
+  --model "HuggingFaceTB/SmolLM2-135M-Instruct" \
+  --task "text-generation" \
+  --recipe "xnnpack" \
+  --use_custom_sdpa \
+  --use_custom_kv_cache \
+  --qlinear 8da4w \
+  --qembedding 8w \
+  --max_seq_len 128 \
+  --output_dir module_1/artifacts/smollm2_optimum
+```
+
+The `xnnpack` recipe selects the optimized CPU backend,
+`--use_custom_kv_cache` enables the cache path used during generation,
+and the quantization flags show where size and latency trade-offs enter
+the LLM export flow.
+
+This module does not provide a full packaged LLM walkthrough. The setup
+has more moving parts than the OPT and DistilBERT examples, and the
+result depends heavily on model size, cache support, quantization, and
+the target runtime. If you want to continue in that direction, start with
+the ExecuTorch [working with LLMs](https://docs.pytorch.org/executorch/stable/llm/working-with-llms.html)
+documentation. 
+
+For a straightforward example of running another LLM using ExecuTorch, try the Arm Learning Path
+[Run Llama3 on Raspberry Pi 5 using ExecuTorch](https://learn.arm.com/learning-paths/embedded-and-microcontrollers/rpi-llama3/).
+
 ## DistilBERT
+
+DistilBERT is a compact transformer encoder created by distilling BERT
+into a smaller model. It is bidirectional rather than autoregressive:
+instead of generating one token at a time, it reads the whole input
+sequence and produces contextual predictions from that sequence.
+
+In this module, DistilBERT is used as a fill-mask model. The application
+places one `[MASK]` token in a sentence, runs one forward pass, and uses
+the model's vocabulary logits to suggest likely replacements. That gives
+you a second transformer workload to compare with OPT-125M: encoder
+inference with one fixed request/response pass rather than decoder
+generation with a repeated next-token loop.
 
 ### 1. DistilBERT Preparation and Export
 
-DistilBERT gives us a second transformer shape to compare with OPT. It is an encoder model, not an autoregressive decoder, so its graph structure and runtime behavior are different.
-
-DistilBERT is closer to many on-device NLP workloads than free-form text generation. Encoder models are often used for classification, ranking, search, intent detection, and fill-mask style prediction. They usually run one forward pass over a fixed-length sequence rather than generating tokens one at a time.
-
-For this module, we use DistilBERT as a fill-mask model. The preparation flow still exports a fixed-shape PyTorch program, but the wrapper is different from OPT. Instead of keeping final-token logits, it extracts logits at the `[MASK]` token:
+The preparation flow still exports a fixed-shape PyTorch program, but
+the wrapper is different from OPT. Instead of keeping final-token logits,
+it extracts logits at the `[MASK]` token:
 
 ```python
 def forward(self, input_ids, attention_mask):

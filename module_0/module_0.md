@@ -77,7 +77,7 @@ Module 2: Optimize Image Classification on Arm CPUs
 
 Deploy MobileNetV2 for image classification on Arm CPUs, then
 investigate XNNPACK delegation, INT8 quantization, latency reduction,
-and ExecuTorch/TensorFlow Lite workflow.
+and task-level behavior after optimization.
 
 **Estimated time to complete: 75-100 minutes**
 
@@ -164,6 +164,23 @@ environments where:
 
 In many edge scenarios, this determines whether deployment is possible
 at all.
+
+## Framework Comparison: ExecuTorch vs TensorFlow Lite
+
+TensorFlow Lite is another framework and runtime you might know. Both
+frameworks support edge deployment, but they fit different training and
+deployment workflows.
+
+| Feature | ExecuTorch | TensorFlow Lite |
+|---|---|---|
+| Training framework | PyTorch | TensorFlow/Keras |
+| Model format | `.pte` | `.tflite` |
+| Quantization flow | PyTorch/torchao oriented | TensorFlow tooling oriented |
+| Runtime direction | PyTorch-native edge deployment | Mature mobile/embedded deployment |
+| Best fit | PyTorch teams that want a direct edge path | TensorFlow teams with existing TFLite workflows |
+
+The choice often comes down to the training framework, team expertise,
+target hardware, and maturity requirements.
 
 **VIDEO** *Course trailer-style polished video/animation on PyTorch model (30-45
 seconds): show overall deployment workflow that the course follows.
