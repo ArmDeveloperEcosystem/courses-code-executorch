@@ -32,7 +32,7 @@ In this section, you skip local export and quantization. The work is to
 integrate a pre-optimized `.pte` artifact into an application and understand
 the preprocessing, postprocessing, and runtime checks needed around it.
 
-| Workflow step | What changes in this section |
+| Workflow step | What changes vs stays the same in this section |
 |---|---|
 | Model preparation | Download a pre-optimized AI Portal package instead of exporting from PyTorch |
 | Quantization | Use the packaged INT8 model instead of running PTQ calibration locally |
