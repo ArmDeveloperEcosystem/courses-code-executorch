@@ -446,14 +446,6 @@ For one run of OPT-125M with the pinned Module 1 environment, the script reporte
 | `opt125m_portable.pte` | portable | 501.12 MB |
 | `opt125m_xnnpack.pte` | XNNPACK | 655.57 MB |
 
-Before moving on, confirm that the lowering step produced:
-
-- the portable `.pte`
-- the XNNPACK `.pte`
-- the XNNPACK metadata JSON
-
-If you ran the commands yourself, compare your artifact sizes and delegation summary with the reference values below. If they differ, keep a note of the difference and continue.
-
 In this reference run, the XNNPACK artifact is about 154 MB larger than the portable artifact.
 That increase comes from backend-specific lowered data and metadata
 stored inside the `.pte`. This is normal: delegation can improve runtime
@@ -469,6 +461,14 @@ normalization-related operations, including `alloc` (285), `getitem`
 (111), `expand_copy` (49), `native_layer_norm` (25), and several mask or
 elementwise operations such as `logical_not`, `mul.Scalar`,
 `scalar_tensor`, and `where` (24 each).
+
+Before moving on, confirm that the lowering step produced:
+
+- the portable `.pte`
+- the XNNPACK `.pte`
+- the XNNPACK metadata JSON
+
+If you ran the commands yourself, compare your artifact sizes and delegation summary with the reference values. If they differ, keep a note of the difference and continue.
 
 When ExecuTorch lowers with XNNPACK, it partitions the graph. Supported subgraphs become XNNPACK delegate regions. The remaining operators stay on the default ExecuTorch path, backed by the Portable Kernel Library.
 
@@ -571,7 +571,7 @@ Before benchmarking, make a prediction from the Model Explorer view:
 | What benchmark result would this delegation pattern lead you to expect? | |
 
 
-### 4. Raspberry Pi Setup
+## 4. Raspberry Pi Setup
 
 Run the next steps on the Raspberry Pi unless told otherwise - you are recommended to SSH into your Pi from your development machine.
 
@@ -770,17 +770,6 @@ The plot section shows the PyTorch and ExecuTorch with XNNPACK latency distribut
 
 ![OPT-125M PyTorch and ExecuTorch with XNNPACK benchmark plots in the browser dashboard.](images/opt125m-results-dashboard-plots.png)
 
-### Compare runtime performance 
-
-Use your dashboard result if you ran the benchmark. Otherwise, use the reference result below.
-
-After reviewing the table and plots, answer:
-
-| Decision question | Your conclusion |
-|---|---|
-| Which runtime path would you take forward for OPT-125M? | |
-| What evidence supports that choice? | |
-| What risk or limitation remains before production use? | |
 
 For one Raspberry Pi run with the pinned Module 1 environment, the reference OPT benchmark reported:
 
@@ -792,7 +781,7 @@ For one Raspberry Pi run with the pinned Module 1 environment, the reference OPT
 
 The portable ExecuTorch result is a single measured run, so treat it as a baseline check rather than a latency distribution. At 64,372.10 ms, it took about 64.4 seconds for one forward pass. It shows that the exported portable `.pte` can execute on the Pi, but it also shows why the portable kernel path is not the performance path for this OPT workload.
 
-The XNNPACK result is the main comparison. In this run, XNNPACK reduced mean latency from 488.90 ms to 301.44 ms compared with PyTorch eager execution. That is about a 1.6x speedup and about 38% lower mean latency compared with PyTorch eager execution. The median tells the same story: 491.19 ms for PyTorch eager
+The XNNPACK result is the main comparison. In this run, XNNPACK reduced mean latency from 488.90 ms to 301.44 ms compared with PyTorch eager execution. That is about a 1.6x speedup and about 38% lower mean latency compared with PyTorch eager execution. The median tells the same story: 491.19 ms for PyTorch eager compared with 300.87 ms for XNNPACK.
 
 Connect that timing back to the lowering evidence. In the reference run, the ExecuTorch with XNNPACK `.pte` artifact was larger than the portable `.pte` artifact, and the graph still had 50 XNNPACK delegate call sites plus 632 fallback `call_function` operators, but the delegated regions captured enough expensive transformer work to outweigh the backend boundary costs. 
 
@@ -801,6 +790,19 @@ This is the deployment trade-off in miniature: a larger delegated artifact, but 
 For OPT, compare the timing with the lowering evidence. For this baseline, it is expected that portable ExecuTorch will be slower than PyTorch eager. The portable path is optimized for operator coverage and deployability, not peak CPU performance. If XNNPACK is faster, look back at the delegation summary and Model Explorer view to see whether large linear and matrix multiplication-heavy regions were delegated. If XNNPACK is only a little faster, or not faster, that is also useful evidence. It may mean the graph was fragmented by fallback operators, or that runtime transitions between delegated and non-delegated regions ate into the backend gains.
 
 The point is not just to crown the fastest runtime. The benchmark should help explain what the exported model is actually doing on the Pi.
+
+### Compare runtime performance 
+
+Use your dashboard result if you ran the benchmark. Otherwise, use the reference result.
+
+After reviewing the table and plots, answer:
+
+| Decision question | Your conclusion |
+|---|---|
+| Which runtime path would you take forward for OPT-125M? | |
+| What evidence supports that choice? | |
+| What risk or limitation remains before production use? | |
+
 
 ## 8. Run the OPT Chatbot Demo
 
@@ -1036,7 +1038,7 @@ Before moving on, confirm that the lowering step produced:
 - the XNNPACK `.pte`
 - the XNNPACK metadata JSON
 
-If you ran the commands yourself, compare your artifact sizes and delegation summary with the reference values below. If they differ, keep a note of the difference and continue.
+If you ran the commands yourself, compare your artifact sizes and delegation summary with the reference values. If they differ, keep a note of the difference and continue.
 
 ## 3. Inspect DistilBERT Delegation with Model Explorer
 
@@ -1165,18 +1167,6 @@ The plot section shows the DistilBERT PyTorch and ExecuTorch with XNNPACK latenc
 
 ![DistilBERT PyTorch and ExecuTorch with XNNPACK benchmark plots in the browser dashboard.](images/distilbert-results-dashboard-plots.png)
 
-### Compare runtime performance 
-
-Use your dashboard result if you ran the benchmark. Otherwise, use the reference result below.
-
-After reviewing the table and plots, answer:
-
-| Decision question | Your conclusion |
-|---|---|
-| Which runtime path would you take forward for OPT-125M? | |
-| What evidence supports that choice? | |
-| What risk or limitation remains before production use? | |
-
 For one Raspberry Pi run with the pinned Module 1 environment, the DistilBERT benchmark reported:
 
 | Runtime | Warmups | Runs | Mean | Median | Min | Max |
@@ -1196,6 +1186,20 @@ You should read the DistilBERT results in two ways. First, compare PyTorch, port
 Be careful with raw model-to-model comparisons. DistilBERT and OPT have different sequence lengths, vocabulary sizes, tasks, and graph structures. The useful comparison is not "Which model is faster?" but "Does each model's delegation pattern explain its own runtime behavior?"
 
 For DistilBERT, expect the benchmark to feel more like a single request/response workload. There is no autoregressive generation loop, so the measured forward pass is closer to the way the autocomplete demo uses the model. In this run, XNNPACK is substantially faster, so check whether Model Explorer shows useful delegated regions around the encoder's linear and attention work. If your own gain is smaller, look for fallback operators or fragmented regions around shape, mask, or normalization operations.
+
+### Compare runtime performance 
+
+Use your dashboard result if you ran the benchmark. Otherwise, use the reference result.
+
+After reviewing the table and plots, answer:
+
+| Decision question | Your conclusion |
+|---|---|
+| Which runtime path would you take forward for DistilBERT? | |
+| How does this result compare with OPT-125M? | |
+| What benchmark result or graph observation supports your choice? | |
+| What risk or limitation remains before production use? | |
+
 
 ## 7. Run the DistilBERT Autocomplete Demo
 
