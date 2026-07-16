@@ -162,7 +162,7 @@ In this module, you will compare both.
 Your results may vary depending on whether you are using a Raspberry Pi,
 Arm Linux device, Mac, or another system. On high-specification devices such as laptops, PyTorch may perform as well as or better than ExecuTorch because PyTorch uses highly optimized CPU backends, while ExecuTorch is designed primarily for constrained environments.
 
-Focus on the pattern of evidence:
+As you work thorugh the deployment workflow, compare: 
 
 - how PyTorch compares with portable ExecuTorch
 
@@ -446,7 +446,15 @@ For one run of OPT-125M with the pinned Module 1 environment, the script reporte
 | `opt125m_portable.pte` | portable | 501.12 MB |
 | `opt125m_xnnpack.pte` | XNNPACK | 655.57 MB |
 
-In this reference run, the XNNPACK artifact is about 154 MB larger than the portable artifact.
+Before moving on, confirm that the lowering step produced:
+
+- the portable `.pte`
+- the XNNPACK `.pte`
+- the XNNPACK metadata JSON
+
+If you ran the commands yourself, compare your artifact sizes and delegation summary with the reference values. If they differ, keep a note of the difference and continue.
+
+In the reference run, the XNNPACK artifact is about 154 MB larger than the portable artifact.
 That increase comes from backend-specific lowered data and metadata
 stored inside the `.pte`. This is normal: delegation can improve runtime
 performance, but it can also make the deployable artifact larger.
@@ -461,14 +469,6 @@ normalization-related operations, including `alloc` (285), `getitem`
 (111), `expand_copy` (49), `native_layer_norm` (25), and several mask or
 elementwise operations such as `logical_not`, `mul.Scalar`,
 `scalar_tensor`, and `where` (24 each).
-
-Before moving on, confirm that the lowering step produced:
-
-- the portable `.pte`
-- the XNNPACK `.pte`
-- the XNNPACK metadata JSON
-
-If you ran the commands yourself, compare your artifact sizes and delegation summary with the reference values. If they differ, keep a note of the difference and continue.
 
 When ExecuTorch lowers with XNNPACK, it partitions the graph. Supported subgraphs become XNNPACK delegate regions. The remaining operators stay on the default ExecuTorch path, backed by the Portable Kernel Library.
 
@@ -1018,6 +1018,15 @@ This creates `distilbert_fillmask_xnnpack.pte` and `distilbert_fillmask_xnnpack.
 | `distilbert_fillmask_portable.pte` | portable | 268.03 MB |
 | `distilbert_fillmask_xnnpack.pte` | XNNPACK | 361.80 MB |
 
+### Check deployable artifacts
+
+Before moving on, confirm that the lowering step produced:
+
+- the portable `.pte`
+- the XNNPACK `.pte`
+- the XNNPACK metadata JSON
+
+If you ran the commands yourself, compare your artifact sizes and delegation summary with the reference values. If they differ, keep a note of the difference and continue.
 
 In the reference run, the XNNPACK artifact is about 94 MB larger than the portable artifact. As with OPT, that extra size comes from backend-specific lowered data and metadata stored in the `.pte`.
 
@@ -1030,15 +1039,7 @@ The fallback list was again dominated by graph bookkeeping, shape, mask, and nor
 
 Compared with the OPT run, DistilBERT produced fewer delegate call sites and fewer fallback operators. That does not automatically mean the graph is better optimized, but it is a useful signal. DistilBERT is an encoder with one fixed forward pass, not an autoregressive decoder used repeatedly for generation, so the graph can be less fragmented. It still contains mask handling, reshapes, normalization, and elementwise operations that stay on the default path.
 
-### Check deployable artifacts
 
-Before moving on, confirm that the lowering step produced:
-
-- the portable `.pte`
-- the XNNPACK `.pte`
-- the XNNPACK metadata JSON
-
-If you ran the commands yourself, compare your artifact sizes and delegation summary with the reference values. If they differ, keep a note of the difference and continue.
 
 ## 3. Inspect DistilBERT Delegation with Model Explorer
 
