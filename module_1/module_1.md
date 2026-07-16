@@ -162,7 +162,7 @@ In this module, you will compare both.
 Your results may vary depending on whether you are using a Raspberry Pi,
 Arm Linux device, Mac, or another system. On high-specification devices such as laptops, PyTorch may perform as well as or better than ExecuTorch because PyTorch uses highly optimized CPU backends, while ExecuTorch is designed primarily for constrained environments.
 
-As you work thorugh the deployment workflow, compare: 
+As you work through the deployment workflow, compare: 
 
 - how PyTorch compares with portable ExecuTorch
 
