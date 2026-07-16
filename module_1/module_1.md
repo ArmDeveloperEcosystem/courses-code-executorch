@@ -439,30 +439,20 @@ module_1/scripts/aot/lower_to_executorch.py \
 
 This creates `opt125m_xnnpack.pte` and `opt125m_xnnpack.json`. The XNNPACK metadata includes the delegation summary printed by the script.
 
-### Check deployable artifacts
-
-Before moving on, check what the lowering step produced and what deployment trade-off it creates.
-
-| OPT-125M artifact output | Your result | 
-|---|---| 
-| Exported `.pt2` created? | | 
-| Portable `.pte` created? | | 
-| XNNPACK `.pte` created? | | 
-| Portable `.pte` size | | 
-| XNNPACK `.pte` size | | 
-| Size increase from portable to XNNPACK | | 
-| XNNPACK metadata file created? | | 
-| XNNPACK delegate call sites | | 
-| Fallback `call_function` operator count | | 
-| Three most common fallback operators | | 
-| Artifact/deployability judgement | |
-
-After recording your own values, compare them with this reference run from the pinned Module 1 environment: 
+For one run of OPT-125M with the pinned Module 1 environment, the script reported: 
 
 | Artifact | Backend | PTE size |
 | --- | --- | ---: |
 | `opt125m_portable.pte` | portable | 501.12 MB |
 | `opt125m_xnnpack.pte` | XNNPACK | 655.57 MB |
+
+Before moving on, confirm that the lowering step produced:
+
+- the portable `.pte`
+- the XNNPACK `.pte`
+- the XNNPACK metadata JSON
+
+If you ran the commands yourself, compare your artifact sizes and delegation summary with the reference values below. If they differ, keep a note of the difference and continue.
 
 In this reference run, the XNNPACK artifact is about 154 MB larger than the portable artifact.
 That increase comes from backend-specific lowered data and metadata
@@ -572,17 +562,13 @@ This is the key difference: XNNPACK does not replace the whole `.pte`. It captur
 
 ### Inspect delegation
 
-Before benchmarking on the Raspberry Pi, record what the lowered graph suggests about XNNPACK delegation. After the benchmark, you will use these observations to explain the runtime result.
+Before benchmarking, make a prediction from the Model Explorer view:
 
-| OPT-125M delegation output | Your observation | 
-|---|---| 
-| XNNPACK delegate call sites | | 
-| Main fallback operators | | 
-| Did the graph appear mostly delegated or mixed? | | 
-| Did delegated regions contain expensive linear or matmul-style work? | | 
-| Did fallback operators appear to fragment the graph? | | 
-| What benchmark result would this delegation pattern lead you to expect?| | 
-| What would you inspect or optimize next? | |
+| Question | Your prediction |
+|---|---|
+| Does the XNNPACK graph look mostly delegated or mixed? | |
+| Did delegated regions appear to capture expensive linear or matmul-style work? | |
+| What benchmark result would this delegation pattern lead you to expect? | |
 
 
 ### 4. Raspberry Pi Setup
@@ -772,37 +758,29 @@ Then open the dashboard locally on your development machine:
 http://localhost:8080
 ```
 
-### Compare runtime performance 
-
-Record the Raspberry Pi benchmark results and choose the runtime path you would take forward for this workload.
-| OPT-125M runtime result | Warmups | Runs | Mean latency | Median latency | Min | Max | Interpretation | 
-|---|---:|---:|---:|---:|---:|---:|---| 
-| PyTorch eager | | | | | | | | 
-| ExecuTorch portable | | | | | | | | 
-| ExecuTorch with XNNPACK | | | | | | | |
-
 The reference dashboard table here summarizes the run count and latency statistics for each runtime:
 
 ![OPT-125M benchmark results summary in the browser dashboard.](images/opt125m-results-dashboard-summary.png)
 
 Because only the OPT benchmark files have been generated so far, the dashboard should show the PyTorch, portable ExecuTorch, and ExecuTorch with XNNPACK runs for OPT-125M. Later, after the DistilBERT benchmarks, the same dashboard will include both models.
 
-Based on your results or the benchmark results, which runtime path would you choose for the next OPT prototype?
-
-| Runtime decision prompt | Your answer | 
-|---|---| 
-| Which runtime path performed best on your Pi? | | 
-| Was portable ExecuTorch a practical latency path for this workload? | | 
-| Did XNNPACK improve latency enough to justify using it in the next prototype? | | 
-| Which runtime path would you choose for the next OPT prototype? | | 
-| What benchmark result or graph observation supports that choice? | |
-
-
 Read the table and plots together. The table includes PyTorch, portable ExecuTorch, and ExecuTorch with XNNPACK. The plots are shown for PyTorch and ExecuTorch with XNNPACK only, where repeated runs make a histogram and time series meaningful. The mean and median show typical latency. The minimum and maximum show how much the run varied. The histogram shows whether most timings are clustered or spread out, and the run-by-run plot can reveal drift from system load, CPU frequency changes, or thermal effects.
 
 The plot section shows the PyTorch and ExecuTorch with XNNPACK latency distributions and run-by-run timing:
 
 ![OPT-125M PyTorch and ExecuTorch with XNNPACK benchmark plots in the browser dashboard.](images/opt125m-results-dashboard-plots.png)
+
+### Compare runtime performance 
+
+Use your dashboard result if you ran the benchmark. Otherwise, use the reference result below.
+
+After reviewing the table and plots, answer:
+
+| Decision question | Your conclusion |
+|---|---|
+| Which runtime path would you take forward for OPT-125M? | |
+| What evidence supports that choice? | |
+| What risk or limitation remains before production use? | |
 
 For one Raspberry Pi run with the pinned Module 1 environment, the reference OPT benchmark reported:
 
@@ -875,22 +853,6 @@ next_token = torch.multinomial(
 input_ids = torch.cat([input_ids, next_token], dim=1)
 attention_mask = torch.cat([attention_mask, torch.ones_like(next_token)], dim=1)
 ```
-### Check application behavior
-
-The benchmark measured one fixed next-token forward pass. The chatbot demo shows what happens when the delegated model is used repeatedly in an application loop.
-
-| OPT chatbot output | Your result | 
-|---|---| 
-| Prompt used | | 
-| Generated token count | | 
-| First-token latency | | 
-| Average decode-step time | | 
-| Token rate | | 
-| Did the application run correctly? | | 
-| Did the application feel responsive? | | 
-| What limited the experience: model latency, repeated decoding, output quality, or something else? | | 
-| Is this workload a good fit for this edge CPU target? | | 
-| What would you need to improve before using this pattern in production? | |
 
 Because OPT is a decoder-only, autoregressive language model, it does not produce a whole answer in one forward pass. It predicts the next token, then the application decides what to do with that token. The app loop is therefore part of the product behavior, not just a benchmark wrapper.
 
@@ -903,6 +865,16 @@ Do not worry if the generated text is strange. OPT-125M is small for a language 
 The demo takes longer than the benchmark because the benchmark measures one fixed next-token forward pass, while the demo generates many tokens. The demo does not use a KV cache, so each generated token runs another forward pass over the current context window. The timing panel in the demo makes that visible: generation latency is the cost of many ExecuTorch forwards plus tokenization, sampling, and page handling.
 
 You could implement a KV cache yourself, and production text-generation systems normally do. Instead of recomputing attention over the whole context on every step, the app stores the previous key/value tensors and feeds them back into the model for the next token. That is much faster for longer generations, but it also changes the model interface: the exported program needs cache inputs and cache outputs, the app has to manage cache tensor shapes and positions, and the benchmark needs to measure a different decode path. We are not covering that in this module because the goal here is to understand export, lowering, delegation, and basic ExecuTorch app integration first.
+
+### Check application behavior
+
+After trying the chatbot and reading the explanation above, answer:
+
+| Application-fit question | Your conclusion |
+|---|---|
+| Did the app run correctly? | |
+| Did repeated decoding make it feel responsive enough for the target? | |
+| What would need to change before this pattern was production-ready? | |
 
 <details><summary>### 9. (Optional) Learn Where LLM-Specific Tooling Fits</summary>
 
@@ -1039,32 +1011,13 @@ module_1/scripts/aot/lower_to_executorch.py \
 
 This creates `distilbert_fillmask_xnnpack.pte` and `distilbert_fillmask_xnnpack.json`. 
 
-### Check deployable artifacts
-
-Before moving on, check the same artifact outputs for DistilBERT so that you can compare it with OPT-125M. 
-
-| DistilBERT artifact output | Your result | 
-|---|---| 
-| Exported `.pt2` file created? | | 
-| Portable `.pte` file created? | | 
-| XNNPACK `.pte` file created? | | 
-| Portable `.pte` size | | 
-| XNNPACK `.pte` size | | 
-| Size increase from portable to XNNPACK | | 
-| XNNPACK metadata file created? | | 
-| XNNPACK delegate call sites | | 
-| Fallback `call_function` operator count | | 
-| Three most common fallback operators | | 
-| Artifact/deployability judgement compared with OPT-125M | | 
-
-After recording your own values, compare them with this reference run from the pinned Module 1 environment: 
-
 | Artifact | Backend | PTE size |
 | --- | --- | ---: |
 | `distilbert_fillmask_portable.pte` | portable | 268.03 MB |
 | `distilbert_fillmask_xnnpack.pte` | XNNPACK | 361.80 MB |
 
-The XNNPACK artifact is about 94 MB larger than the portable artifact. As with OPT, that extra size comes from backend-specific lowered data and metadata stored in the `.pte`.
+
+In the reference run, the XNNPACK artifact is about 94 MB larger than the portable artifact. As with OPT, that extra size comes from backend-specific lowered data and metadata stored in the `.pte`.
 
 The same XNNPACK run reported:
 
@@ -1074,6 +1027,16 @@ The same XNNPACK run reported:
 The fallback list was again dominated by graph bookkeeping, shape, mask, and normalization work, including `alloc` (161), `getitem` (60), `expand_copy` (25), and `native_layer_norm` (14). Mask and elementwise operations such as `logical_not`, `mul.Scalar`, `scalar_tensor`, and `where` also remained on the default path, along with DistilBERT-specific selection work such as `argmax` and `index`.
 
 Compared with the OPT run, DistilBERT produced fewer delegate call sites and fewer fallback operators. That does not automatically mean the graph is better optimized, but it is a useful signal. DistilBERT is an encoder with one fixed forward pass, not an autoregressive decoder used repeatedly for generation, so the graph can be less fragmented. It still contains mask handling, reshapes, normalization, and elementwise operations that stay on the default path.
+
+### Check deployable artifacts
+
+Before moving on, confirm that the lowering step produced:
+
+- the portable `.pte`
+- the XNNPACK `.pte`
+- the XNNPACK metadata JSON
+
+If you ran the commands yourself, compare your artifact sizes and delegation summary with the reference values below. If they differ, keep a note of the difference and continue.
 
 ## 3. Inspect DistilBERT Delegation with Model Explorer
 
@@ -1108,17 +1071,13 @@ Do not compare only delegate counts. A smaller number of delegate regions can be
 
 ### Inspect delegation
 
-Use the lowering metadata and Model Explorer graph to explain whether the DistilBERT encoder graph delegated differently from the OPT decoder graph. 
+Before benchmarking, compare the DistilBERT graph with OPT:
 
-| DistilBERT delegation output | Your observation | 
-|---|---| 
-| XNNPACK delegate call sites | | 
-| Main fallback operators | | 
-| Did the graph appear mostly delegated or mixed? | | 
-| Did the graph appear more or less fragmented than OPT-125M? | | 
-| Did delegated regions contain expensive linear or attention work? | | 
-| What benchmark result would this delegation pattern lead you to expect? | | 
-| What would you inspect or optimize next? | |
+| Question | Your prediction |
+|---|---|
+| Does DistilBERT look more or less fragmented than OPT-125M? | |
+| Did delegated regions appear to capture expensive encoder work? | |
+| What benchmark result would this lead you to expect? | |
 
 
 ## 4. Copy DistilBERT Artifacts to Raspberry Pi
@@ -1198,25 +1157,6 @@ Open the same local URL on your development machine:
 http://localhost:8080
 ```
 
-### Compare runtime performance
-
-Record your DistilBERT results before comparing with the reference run. 
-| DistilBERT runtime result | Warmups | Runs | Mean latency | Median latency | Min | Max | Interpretation | 
-|---|---:|---:|---:|---:|---:|---:|---| 
-| PyTorch eager | | | | | | | | 
-| ExecuTorch portable | | | | | | | | 
-| ExecuTorch with XNNPACK | | | | | | | | 
-How does this result compare with OPT-125M?
-
-| Runtime decision prompt | Your answer | 
-|---|---| 
-| Which runtime path performed best for DistilBERT? | | 
-| Was portable ExecuTorch a practical latency path for this workload? | | 
-| Did XNNPACK improve latency enough to justify the larger artifact? | | 
-| Which runtime path would you choose for the next DistilBERT prototype? | | 
-| How did the result compare with OPT-125M? | | 
-| What benchmark result or graph observation supports your choice? | |
-
 The dashboard table now includes the DistilBERT PyTorch, portable ExecuTorch, and ExecuTorch with XNNPACK runs:
 
 ![DistilBERT benchmark results summary in the browser dashboard.](images/distilbert-results-dashboard-summary.png)
@@ -1224,6 +1164,18 @@ The dashboard table now includes the DistilBERT PyTorch, portable ExecuTorch, an
 The plot section shows the DistilBERT PyTorch and ExecuTorch with XNNPACK latency distributions and run-by-run timing:
 
 ![DistilBERT PyTorch and ExecuTorch with XNNPACK benchmark plots in the browser dashboard.](images/distilbert-results-dashboard-plots.png)
+
+### Compare runtime performance 
+
+Use your dashboard result if you ran the benchmark. Otherwise, use the reference result below.
+
+After reviewing the table and plots, answer:
+
+| Decision question | Your conclusion |
+|---|---|
+| Which runtime path would you take forward for OPT-125M? | |
+| What evidence supports that choice? | |
+| What risk or limitation remains before production use? | |
 
 For one Raspberry Pi run with the pinned Module 1 environment, the DistilBERT benchmark reported:
 
@@ -1296,28 +1248,26 @@ token = self.tokenizer.decode([token_id]).strip()
 if not is_word_suggestion(token, token_piece, self.tokenizer.all_special_tokens):
     continue
 ```
-### Check application behavior
-The autocomplete demo checks application fit for a single-pass encoder workload. Unlike OPT generation, this app runs one model forward pass for each masked input and turns the logits into ranked suggestions. 
-
-| DistilBERT autocomplete output | Your result | 
-|---|---| 
-| Input sentence used | | 
-| Top suggestions observed | | 
-| Request latency or perceived responsiveness | | 
-| Did the application run correctly? | | 
-| Did suggestions update quickly enough for autocomplete? | | 
-| Did this feel more or less suitable for edge CPU deployment than the OPT chatbot? | | 
-| Is this workload a good fit for this edge CPU target? | | 
-| What application behavior or timing result supports that judgement? | | 
-| What would you need to improve before using this pattern in production? | |
 
 This is a useful example of integrating ExecuTorch into an app that is not a chatbot. The `.pte` still provides the model execution, but the product behavior comes from the surrounding application code: where the mask is placed, how suggestions are filtered, and how the ranked tokens are presented to the user.
 
 The suggestions may not always be the word a person would choose. DistilBERT is predicting a masked token from context, not running a purpose-built autocomplete product. Treat the demo as an example of model integration and result handling rather than as a finished writing assistant.
 
+### Check application behavior
+The autocomplete demo checks application fit for a single-pass encoder workload. Unlike OPT generation, this app runs one model forward pass for each masked input and turns the logits into ranked suggestions. 
+
+After trying the autocomplete demo and reading the explanation above, answer:
+
+| Application-fit question | Your conclusion |
+|---|---|
+| Did the app run correctly? | |
+| Did the single-pass encoder pattern feel suitable for local autocomplete? | |
+| What would need to change before this pattern was production-ready? | |
+
+
 # Compare Deployment Trade-offs from the Workflow
 
-You have now completed the same deployment workflow for OPT-125M and DistilBERT. Use the outputs from the workflow to make a deployment judgement. Do not copy every number again. Instead, compare the trade-offs that affect the next engineering decision. 
+You have now completed the same deployment workflow for OPT-125M and DistilBERT. Use the outputs from the workflow to make a deployment judgement. Compare the trade-offs that affect the next engineering decision. 
 
 | Deployment question | Your conclusion | 
 |---|---| 
