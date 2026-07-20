@@ -18,7 +18,7 @@ In this module, you will compare three ways to run MobileNetV2 image classificat
 
 The goal is not to prove that quantization is always better. Instead, you will work through a practical ExecuTorch deployment workflow and compare the trade-offs that appear along the way: model structure, backend delegation, artifact size, target-device latency, quantization, and classification output.
 
-You will use MobileNetV2, a lightweight convolutional neural network for image classification. This gives you a contrast with the transformer workloads from Module 1: MobileNetV2 has convolution-heavy structure that can map more cleanly to optimized CPU kernels.
+You will use MobileNetV2, a lightweight convolutional neural network for image classification. This provides a contrast with the transformer workloads from Module 1: MobileNetV2 has convolution-heavy structure that can map more cleanly to optimized CPU kernels.
 
 You will repeat the same deployment pattern used in Module 1, with one new step: INT8 quantization.
 
@@ -48,7 +48,7 @@ rather than the main CPU performance path for these workloads. Keeping XNNPACK
 as the backend for both `.pte` artifacts lets this module focus on two new
 variables: a convolution-heavy model and INT8 precision.
 
-The completed comparison shows the practical tradeoffs for running MobileNetV2
+The completed comparison shows the practical trade-offs for running MobileNetV2
 on an edge CPU: runtime latency, `.pte` artifact size, delegation, and
 classification output. Producing the correct top-1 label for one image is not
 enough on its own.
@@ -90,11 +90,11 @@ Module 1, this can mean:
 - larger portions of the model handled by XNNPACK
 - a greater opportunity to reduce latency
 
-INT8 quantization changes model weights and, where supported, activations, from
+INT8 quantization changes model weights and, where supported, activations from
 FP32 to a lower-precision representation. This reduces storage and memory
 bandwidth requirements and can make optimized integer kernels available.
-Quantization also introduces numerical approximation, so confidence scores and
-occasionally prediction rankings can change. The relevant check is whether the
+Quantization also introduces numerical approximation, so confidence scores and, 
+occasionally, prediction rankings can change. The relevant check is whether the
 model still gives useful results on images like the ones the application will
 see.
 
@@ -370,7 +370,7 @@ for node in graph.nodes:
 A delegate call marks a region handled by XNNPACK. A fallback target remains on
 the default ExecuTorch path. Counts alone do not describe the amount of work in
 either path: one delegate call can contain most of a model, and one fallback
-operation can be a small helper operation such as selecting an output value.
+operation can be a small helper operation, such as selecting an output value.
 Read the delegate regions and fallback list together, then confirm their
 practical effect with target-side timing.
 
@@ -419,7 +419,7 @@ Before benchmarking, make a prediction from the delegation summary:
 You have converted the PyTorch model into a deployable FP32 ExecuTorch program
 and checked how much of the graph XNNPACK will run. When you read the
 delegation summary, remember that one delegate call can contain most of the
-model's work, while a fallback operation may be a small helper such as selecting
+model's work, while a fallback operation may be a small helper, such as selecting
 an output value. The next task tests whether that graph placement reduces
 latency on the target CPU.
 
@@ -427,14 +427,14 @@ latency on the target CPU.
 # 3. Benchmark PyTorch and FP32 ExecuTorch on the Raspberry Pi
 
 Delegation shows where ExecuTorch plans to run parts of the graph; it does not
-tell you how fast the model will run on the Raspberry Pi. This step measures PyTorch eager and FP32 ExecuTorch with XNNPACK on the same Raspberry Pi,
+tell you how fast the model will run on the Raspberry Pi. This step measures PyTorch eager and FP32 ExecuTorch with XNNPACK on the same Raspberry Pi
 using the same weights, image, preprocessing, warm-up count, and run count.
 That lets us measure the effect of changing the runtime while keeping the input
 and model fixed.
 
-Module 1 used two warm-ups and 20 measured runs for its slower transformer
+Module 1 used two warm-up runs and 20 measured runs for its slower transformer
 paths, and only one measured run for portable ExecuTorch. MobileNetV2 completes
-each forward pass much more quickly, so ten warm-ups and 50 measured runs remain
+each forward pass much more quickly, so ten warm-up runs and 50 measured runs remain
 practical and provide a larger latency sample.
 
 ## Prepare the Raspberry Pi runtime
@@ -567,7 +567,7 @@ After reviewing the latency and top-5 output, answer:
 
 You have measured the runtime change on the target device while keeping the
 model input and classification result fixed. In the example measurements,
-ExecuTorch with XNNPACK reduced mean latency by about 6.7 times. Delegation and
+ExecuTorch with XNNPACK reduced the mean latency by about 6.7 times. Delegation and
 benchmarking answer different questions: delegation shows where the graph is
 expected to run, while the Raspberry Pi benchmark shows the actual latency
 improvement. MobileNetV2 delegated cleanly to XNNPACK in one large region containing the heavy convolution compute. This delegation pattern is consistent with the substantial latency improvement measured on the Raspberry Pi.
@@ -748,7 +748,7 @@ This is a conservative compromise between optimization and classification
 stability: most of the model's compute is in the convolutional feature
 extractor, while the classifier head directly produces the final ImageNet
 scores. You can optionally pass `--quantize-classifier-head` as a follow-up
-experiment; it may reduce size or latency a little more, but rerun the
+experiment. It may reduce size or latency a little more, but rerun the
 delegation, latency, and top-5 checks because the final scores may shift.
 
 Next, the script prepares the exported model for calibration by adding observer
@@ -897,7 +897,7 @@ quantization flows; their input shape is usually fixed; and top-5
 classification often tolerates small score changes.
 
 Other model types can be more sensitive. Detection models may include heads and
-postprocessing thresholds affected by small numerical changes. Transformer
+post-processing thresholds affected by small numerical changes. Transformer
 graphs can contain masks, normalization, indexing, shape operations, and
 dynamic sequence behavior that fragment the graph or increase numerical
 sensitivity. A successful export therefore does not guarantee a satisfactory
@@ -921,7 +921,7 @@ which matches this module's PT2E and `XNNPACKQuantizer` approach. The broader
 explains fake quantization and the prepare, train, and convert sequence.
 </details>
 
-### INT8 quantization Takeaway
+### INT8 quantization takeaway
 
 You have created a second `.pte` artifact from the same FP32 PyTorch model,
 this time using PT2E post-training quantization for ExecuTorch with XNNPACK.
@@ -1025,7 +1025,7 @@ This follows the same application pattern as the Module 1 demos: load a `.pte`
 artifact, convert user input to the expected tensor representation, run
 inference, and translate the raw output into application behavior.
 
-The demo displays the uploaded image, top-5 predictions, and latency for the
+The demo displays the uploaded image, the top-5 predictions, and latency for the
 INT8 ExecuTorch with XNNPACK artifact:
 
 ![MobileNetV2 classifier demo showing uploaded image and top-5 predictions.](images/mobilenetv2-classifier-demo.png)
@@ -1327,11 +1327,11 @@ You also compared the practical trade-offs between the three runtime paths:
   quantizer the activation ranges it needs before the INT8 `.pte` artifact is
   created.
 - INT8 quantization can change confidence scores and ranking details, so you
-  compare top-5 output as well as artifact size and latency.
+  compare the top-5 output as well as artifact size and latency.
 - The web demo checks the application path: image upload, preprocessing,
   ExecuTorch runtime call, softmax, top-k selection, and label lookup.
 
-For the example measurements in this module, FP32 ExecuTorch with XNNPACK reduced mean latency from 72.55 ms to 10.89 ms, and the INT8 artifact reduced it again to 4.01 ms while preserving a useful top-5 result for the sample image. The same
+For the example measurements in this module, FP32 ExecuTorch with XNNPACK reduced the mean latency from 72.55 ms to 10.89 ms, and the INT8 artifact reduced it again to 4.01 ms while preserving a useful top-5 result for the sample image. The same
 workflow can be applied to another model, but you need to rerun the same
 comparisons. Export success alone does not prove that delegation is good, that
 quantization is acceptable, or that the target device meets the application's
