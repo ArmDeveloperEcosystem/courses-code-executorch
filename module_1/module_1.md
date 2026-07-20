@@ -1,4 +1,4 @@
-# Module 1: Compare Transformer Inference on Arm CPUs
+# Module 1: Deploy and Compare Transformer Inference on Arm CPUs
 
 ### When, and how, should I use ExecuTorch instead of the full PyTorch stack on an Arm CPU?
 
@@ -17,10 +17,8 @@ on an Arm CPU: 
 
 The goal is not to prove that one runtime is always faster than another. Instead, you will work through a practical ExecuTorch deployment workflow and compare the trade-offs that appear along the way: runtime choice, artifact size, backend delegation, target-device latency, and application behavior. 
 
-You will use ExecuTorch's ‘ahead-of-time’ workflow to prepare models on a development machine, inspect delegated graph regions, run the models on a Raspberry Pi, and compare deployment trade-offs. 
-
-By the end, you should be able to explain when ExecuTorch is a better deployment choice than the full PyTorch stack. 
-You will use two transformer models:
+You will use ExecuTorch's ‘ahead-of-time’ workflow to prepare models on a development machine, produce a delegation summary, and then run the models on a Raspberry Pi to collect benchmark results. For each model, the workflow produces two `.pte` artifacts, a delegation summary, target benchmark results, a working demo, and a runtime recommendation. By the
+end, you should be able to explain when ExecuTorch is a better deployment choice than the full PyTorch stack.You will use two transformer models:
 
 > OPT-125M: a decoder-only transformer used for text generation
 >
@@ -549,9 +547,9 @@ The main thing to notice is what changed between the three views:
 
 For OPT-125M, expect the XNNPACK graph to be mixed rather than perfectly clean. Transformer decoder graphs contain masking, reshapes, layout changes, normalization, and indexing-style operations around the expensive matrix work. Those operators can break the graph into several delegated regions with default-path operators in between.
 
-Use this comparison to guide your interpretation:
+Use this comparison to review the lowering results:
 
-| Question | What to look for |
+| Decision checkpoint | What to look for |
 | --- | --- |
 | Did XNNPACK group expensive work? | Larger delegated regions can indicate that supported transformer operations were grouped for optimized CPU execution. |
 | Did the graph fragment? | Multiple small delegate regions can indicate unsupported operators or boundaries between supported regions. |
@@ -783,13 +781,13 @@ The portable ExecuTorch result is a single measured run, so treat it as a baseli
 
 The XNNPACK result is the main comparison. In this run, XNNPACK reduced mean latency from 488.90 ms to 301.44 ms compared with PyTorch eager execution. That is about a 1.6x speedup and about 38% lower mean latency compared with PyTorch eager execution. The median tells the same story: 491.19 ms for PyTorch eager compared with 300.87 ms for XNNPACK.
 
-Connect that timing back to the lowering evidence. In the reference run, the ExecuTorch with XNNPACK `.pte` artifact was larger than the portable `.pte` artifact, and the graph still had 50 XNNPACK delegate call sites plus 632 fallback `call_function` operators, but the delegated regions captured enough expensive transformer work to outweigh the backend boundary costs. 
+Connect that timing back to the lowering results. In the reference run, the ExecuTorch with XNNPACK `.pte` artifact was larger than the portable `.pte` artifact, and the graph still had 50 XNNPACK delegate call sites plus 632 fallback `call_function` operators, but the delegated regions captured enough expensive transformer work to outweigh the backend boundary costs. 
 
 This is the deployment trade-off in miniature: a larger delegated artifact, but substantially lower CPU latency on this target. If your own result differs from the reference run, use the same reasoning: compare artifact size, delegate regions, fallback operators, and measured latency together.
 
-For OPT, compare the timing with the lowering evidence. For this baseline, it is expected that portable ExecuTorch will be slower than PyTorch eager. The portable path is optimized for operator coverage and deployability, not peak CPU performance. If XNNPACK is faster, look back at the delegation summary and Model Explorer view to see whether large linear and matrix multiplication-heavy regions were delegated. If XNNPACK is only a little faster, or not faster, that is also useful evidence. It may mean the graph was fragmented by fallback operators, or that runtime transitions between delegated and non-delegated regions ate into the backend gains.
+For OPT, compare the timing with the lowering results. For this baseline, it is expected that portable ExecuTorch will be slower than PyTorch eager. The portable path is optimized for operator coverage and deployability, not peak CPU performance. If XNNPACK is faster, look back at the delegation summary and Model Explorer view to see whether large linear and matrix multiplication-heavy regions were delegated. If XNNPACK is only a little faster, or not faster, that is also useful evidence. It may mean the graph was fragmented by fallback operators, or that runtime transitions between delegated and non-delegated regions ate into the backend gains.
 
-The point is not just to crown the fastest runtime. The benchmark should help explain what the exported model is actually doing on the Pi.
+Use the benchmark as a decision checkpoint: **Which runtime should move forward? Which result drove that choice?** The answer should connect target latency with the delegation summary and artifact trade-offs.
 
 ### Compare runtime performance 
 
@@ -800,7 +798,7 @@ After reviewing the table and plots, answer:
 | Decision question | Your conclusion |
 |---|---|
 | Which runtime path would you take forward for OPT-125M? | |
-| What evidence supports that choice? | |
+| What result supports that choice? | |
 | What risk or limitation remains before production use? | |
 
 
@@ -1063,12 +1061,12 @@ In the browser UI, select these three files from your machine and open them:
 
 Use the `.pt2` graph as the pre-lowering reference. You should see the same two input names, but the fixed sequence length is `[1, 64]` rather than `[1, 128]`.
 
-Compare the portable and ExecuTorch with XNNPACK `.pte` artifact graphs. The useful questions are the same as before, but the expected differences are model-specific:
+Compare the portable and ExecuTorch with XNNPACK `.pte` artifact graphs. Use the same decision checkpoints as before, while accounting for model-specific differences:
 
 - Does the XNNPACK graph have fewer or larger delegate regions than OPT?
 - Which operators still fall back to the default ExecuTorch path?
 - Are normalization, reshape, mask-position, or elementwise operations creating boundaries?
-- Does the XNNPACK graph look cleaner than the OPT decoder graph?
+- Is the resulting artifact and graph trade-off better suited to this workload than the OPT decoder graph?
 
 Do not compare only delegate counts. A smaller number of delegate regions can be better if they capture the expensive work. A larger number can still be useful if the regions contain the main matrix operations. Use the graph shape, fallback list, and benchmark results together.
 
@@ -1442,7 +1440,7 @@ D. Fixed input shapes can simplify export and deployment, but they do not prove 
 Question 2.
 The lab showed that portable ExecuTorch execution did not outperform
 PyTorch eager execution. Which explanation is most consistent with the
-observed results?
+benchmark results?
 
 A.  Portable execution prioritizes broad operator portability over
     backend-specific kernel optimization
@@ -1466,13 +1464,12 @@ D.  Transformer inference performance is determined primarily by model
 <details>
 <summary>Incorrect answer feedback</summary>  
 B. ExecuTorch is designed as a lightweight deployment runtime, not as a Python execution path for production inference. The issue here is not Python execution, but that the portable runtime is not using backend-specific optimized kernels.
-C. This overstates the conclusion. The lab evidence supports the idea that portable execution emphasizes broad operator support rather than backend-specific acceleration, not that optimizations are generally disabled.
+C. This overstates the conclusion. The workflow results show that portable execution emphasizes broad operator support rather than backend-specific acceleration, not that optimizations are generally disabled.
 D. File size matters for deployment footprint, but inference latency depends heavily on operator implementation, memory access, delegation coverage, and backend optimization. 
 </details>
 
 Question 3.
-Based on the evidence collected throughout the lab, which factors most
-strongly support choosing DistilBERT over OPT-125M for an edge
+Which workflow results make DistilBERT the better fit for this edge
 deployment scenario?
 
 A.  Lower end-to-end inference latency
@@ -1529,7 +1526,7 @@ product decision. Model A is an OPT-like decoder workload for flexible
 text generation, while Model B is a DistilBERT-like encoder workload for
 predictive language understanding.
 
-During testing, the team observes that:
+During testing, the team's results show that:
 
 - both models export successfully to ExecuTorch
 
@@ -1555,7 +1552,7 @@ for their application.
 
 **Question 1**
 
-Which deployment recommendation is best supported by the evidence?
+Which deployment recommendation best meets the application requirements?
 
 A. Deploy Model A because decoder-only transformers are always
 preferable for edge AI applications
@@ -1582,7 +1579,7 @@ device**
 <summary>Incorrect answer feedback</summary>
 A. Decoder-only models are useful for generation, but they are not always preferable on edge devices. The best choice depends on the application’s latency, memory, and task requirements.
 C. Backend delegation should influence deployment decisions when it produces measurable performance gains. In this scenario, XNNPACK substantially improves performance on the Arm CPU.
-D. The evidence does not support rejecting both models. Model B meets the responsiveness target and runs successfully on the target device, so it remains a viable edge deployment option. 
+D. The workflow results do not support rejecting both models. Model B meets the responsiveness target and runs successfully on the target device, so it remains a viable edge deployment option. 
 </details>
 
 **Question 2**
@@ -1601,7 +1598,7 @@ C. Assess power consumption under realistic workloads
 D. Verify that the model continues to meet application requirements with
 representative user inputs
 
-E. Assume lab benchmark results are sufficient evidence for
+E. Assume lab benchmark results are sufficient for
 production deployment
 
 <details>
@@ -1616,7 +1613,7 @@ representative user inputs**
 
 <details>
 <summary>Incorrect answer feedback</summary>  
-E. Lab benchmark results are useful early evidence, but production decisions require validation on representative hardware, realistic inputs, and deployment constraints such as latency, memory, and power.
+E. Lab benchmark results are useful early inputs, but production decisions require validation on representative hardware, realistic inputs, and deployment constraints such as latency, memory, and power.
 </details>
 
 # Apply the ExecuTorch Deployment Decision
