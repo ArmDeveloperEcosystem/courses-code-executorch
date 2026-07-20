@@ -522,18 +522,18 @@ The PyTorch branch calls the `torch.nn.Module`. The ExecuTorch branch loads the
 `.pte` artifact and calls it through the ExecuTorch runtime. The source image,
 preprocessing, weights, warm-ups, and measured run count remain fixed.
 
-# 4.FP32 MobileNetV2benchmark results
+# 4. View the FP32 MobileNetV2benchmark results
 
 On the Raspberry Pi, you should expect to see top-5 predictions similar
 to this:
 
 | Rank | Label | Score |
 |---:|---|---:|
-| 1 | Staffordshire bull terrier | 71.62% |
-| 2 | Bull mastiff | 13.37% |
+| 1 | Staffordshire bullterrier | 71.62% |
+| 2 | bull mastiff | 13.37% |
 | 3 | French bulldog | 8.97% |
 | 4 | American Staffordshire terrier | 5.01% |
-| 5 | Boxer | 0.82% |
+| 5 | boxer | 0.82% |
 
 Example latency measurements are:
 
@@ -577,8 +577,8 @@ improvement. MobileNetV2 delegated cleanly to XNNPACK in one large region contai
 The FP32 ExecuTorch artifact improves latency, but edge deployment also places
 limits on storage, memory bandwidth, and response time. Post-training
 quantization produces a second artifact that uses INT8 values for supported
-parts of the graph. In this task, we will calibrate the model, convert it,
-lower it to XNNPACK, and compare the new INT8 `.pte` artifact with the FP32
+parts of the graph. This step calibrates the model, converts it,
+lowers it to XNNPACK, and compares the new INT8 `.pte` artifact with the FP32
 artifact.
 
 Quantization happens ahead of deployment. ExecuTorch does not take the FP32
@@ -691,6 +691,13 @@ INT8 PTE size: 7.59 MB
 FP32 PTE size: 13.99 MB
 Wrote module_2/artifacts/mobilenetv2/mobilenetv2_int8_xnnpack.json
 ```
+
+For one run with the pinned Module 2 environment, the quantization script reported:
+
+| Artifact | Backend | Precision | `.pte` size |
+|---|---|---|---:|
+| `mobilenetv2_xnnpack.pte` | XNNPACK | FP32 | 13.99 MB |
+| `mobilenetv2_int8_xnnpack.pte` | XNNPACK | INT8 | 7.59 MB |
 
 In that run, the INT8 artifact was 7.59 MB rather than 13.99 MB, a reduction of
 approximately 46%.
@@ -848,11 +855,11 @@ On the Raspberry Pi, you should expect to see output similar to this:
 
 | Rank | Label | Score |
 |---:|---|---:|
-| 1 | Staffordshire bull terrier | 88.9% |
+| 1 | Staffordshire bullterrier | 88.9% |
 | 2 | French bulldog | 4.2% |
 | 3 | American Staffordshire terrier | 4.1% |
-| 4 | Bull mastiff | 2.7% |
-| 5 | Boxer | 0.1% |
+| 4 | bull mastiff | 2.7% |
+| 5 | boxer | 0.1% |
 
 The latency result was:
 
@@ -976,7 +983,7 @@ output, not just a good mean time.
 # 8. Run the INT8 image classifier demo
 
 The benchmark uses one fixed image to make the runtime comparison controlled.
-In this task, we will place the INT8 `.pte` artifact inside a small application
+This step places the INT8 `.pte` artifact inside a small application
 so that you can check the complete input-to-output path with additional images.
 
 Run on the Raspberry Pi:
