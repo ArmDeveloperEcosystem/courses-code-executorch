@@ -57,7 +57,7 @@ enough on its own.
 
 By the end of this module, you will be able to:
 
-- prepare pretrained MobileNetV2 files and record the required image size and
+- prepare pre-trained MobileNetV2 files and record the required image size and
   preprocessing
 - export MobileNetV2 to ExecuTorch and lower supported regions to XNNPACK
 - read a delegation summary and identify which operations did not run through
@@ -134,7 +134,7 @@ the ExecuTorch, PyTorch, and pybinding versions aligned while adding the additio
 
 You are now ready to begin. You will use the same workflow pattern as Module 1, with INT8 quantization added after the FP32 XNNPACK baseline:
 
-1. Prepare the model, labels, image, and preprocessing contract.
+1. Prepare the model, labels, image, and pre-processing contract.
 2. Export MobileNetV2 from PyTorch.
 3. Lower the FP32 model to ExecuTorch with XNNPACK.
 4. Inspect the delegation summary.
@@ -209,7 +209,7 @@ not create an ExecuTorch program.
 
 ## Check and understand the saved model data
 
-The preparation script loads the pretrained model and saves its weights and
+The preparation script loads the pre-trained model and saves its weights and
 labels locally:
 
 ```python
@@ -221,7 +221,7 @@ labels = weights.meta["categories"]
 labels_path.write_text(json.dumps(labels, indent=2) + "\n")
 ```
 
-TorchVision supplies both the pretrained weights and the ImageNet categories.
+TorchVision supplies both the pre-trained weights and the ImageNet categories.
 Saving them in the module artifact directory ensures that export, benchmarking,
 and the demo use the same model data.
 
@@ -243,12 +243,12 @@ The script records the image size and preprocessing in `model_spec.json`:
 
 The shape `[1, 3, 224, 224]` represents one RGB image in NCHW order: batch,
 channels, height, and width. The resize, crop, mean, and standard deviation are
-the ImageNet preprocessing values used by the pretrained model. The PyTorch
+the ImageNet pre-processing values used by the pre-trained model. The PyTorch
 reference, ExecuTorch benchmarks, calibration flow, and web demo all read these
 settings so they do not accidentally resize or normalize the image differently.
 
 Module 1 used `model_spec.json` for token inputs such as `input_ids` and
-`attention_mask`. Module 2 uses it for image tensor shape and preprocessing. In
+`attention_mask`. Module 2 uses it for image tensor shape and pre-processing. In
 both modules, the file keeps the development-machine and Raspberry Pi code
 using the same model inputs.
 
@@ -266,7 +266,7 @@ If any file is missing, rerun `prepare_mobilenetv2.py` before continuing. Later 
 ## Preparation Takeaway
 
 You now have the shared model files, ImageNet labels, sample image, and
-preprocessing settings that every later command will use. The important point
+pre-processing settings that every later command will use. The important point
 is that a fair runtime comparison starts before benchmarking: PyTorch,
 ExecuTorch with XNNPACK, and INT8 ExecuTorch with XNNPACK all need to receive
 the same resized, cropped, normalized image tensor.
@@ -426,10 +426,10 @@ latency on the target CPU.
 
 # 3. Benchmark PyTorch and FP32 ExecuTorch on the Raspberry Pi
 
-Delegation shows where ExecuTorch plans to run parts of the graph; it does not
+Delegation shows where ExecuTorch plans to run parts of the graph. It does not
 tell you how fast the model will run on the Raspberry Pi. This step measures PyTorch eager and FP32 ExecuTorch with XNNPACK on the same Raspberry Pi
-using the same weights, image, preprocessing, warm-up count, and run count.
-That lets us measure the effect of changing the runtime while keeping the input
+using the same weights, image, pre-processing, warm-up count, and run count.
+This allows us to measure the effect of changing the runtime while keeping the input
 and model fixed.
 
 Module 1 used two warm-up runs and 20 measured runs for its slower transformer
@@ -506,7 +506,7 @@ module_2/scripts/pi/benchmark_mobilenetv2.py \
   --out ~/executorch_on_arm/module_2/results/mobilenetv2_xnnpack.json
 ```
 
-Both benchmark paths use the same preprocessed tensor. The script changes only
+Both benchmark paths use the same pre-processed tensor. The script changes only
 the runtime call:
 
 ```python
@@ -520,7 +520,7 @@ else:
 
 The PyTorch branch calls the `torch.nn.Module`. The ExecuTorch branch loads the
 `.pte` artifact and calls it through the ExecuTorch runtime. The source image,
-preprocessing, weights, warm-ups, and measured run count remain fixed.
+pre-processing, weights, warm-ups, and measured run count remain fixed.
 
 # 4. View the FP32 MobileNetV2benchmark results
 
@@ -669,7 +669,7 @@ the observers.
 
 ![CIFAR-10 calibration images used for MobileNetV2 post-training quantization.](images/mobilenetv2-calibration-image-grid.png)
 
-## Quantize and Lower the Model
+## Quantize and lower the model
 
 ```bash
 module_2/scripts/aot/quantize_mobilenetv2_xnnpack.py \
@@ -794,7 +794,7 @@ quantized operations and delegated regions that ExecuTorch will execute. The
 metadata JSON records the artifact path and size, calibration count, and
 delegation summary.
 
-### (Optional) Inspect the FP32 and INT8 Graphs with Model Explorer
+<details> <summary>Optional: Inspect the FP32 and INT8 Graphs with Model Explorer</summary>
 
 Use Model Explorer if you want a visual comparison with the transformer graphs
 from Module 1 and with the FP32 MobileNetV2 graph from earlier in this module.
@@ -826,6 +826,7 @@ that are lowered, but the main question is the same: does XNNPACK contain the
 expensive MobileNetV2 work? Compare both MobileNetV2 artifacts with the more
 fragmented transformer graphs from Module 1. Press `Ctrl+C` in the terminal
 when you have finished.
+</details>
 
 # 6. Benchmark INT8 ExecuTorch on Raspberry Pi
 ## Copy the INT8 artifact to Raspberry Pi
@@ -904,8 +905,7 @@ sensitivity. A successful export therefore does not guarantee a satisfactory
 quantized model.
 
 Possible remedies include a larger calibration set that better matches the
-application's images,
-selective quantization, mixed precision, or quantization-aware training (QAT).
+application's images, selective quantization, mixed precision, or quantization-aware training (QAT).
 QAT simulates quantization effects during training or fine-tuning so that the
 model can adapt before final INT8 conversion.
 
@@ -1157,14 +1157,14 @@ B. A longer export time on the development machine
 
 C. A larger exported `.pte` artifact
 
-D. Additional image preprocessing operations
+D. Additional image pre-processing operations
 
 <details>
 <summary>Answer</summary>
 
 **A. A significant target-side latency reduction after delegation**
 
-Delegation describes the graph mapping; the target-side measurement confirms
+Delegation describes the graph mapping. The target-side measurement confirms
 the practical performance benefit.
 </details>
 
@@ -1173,7 +1173,7 @@ the practical performance benefit.
 
 B. Export time happens on the development machine and does not show target-side inference performance.
 C. A larger `.pte` artifact may be an acceptable trade-off, but it does not prove a runtime benefit.
-D. Preprocessing is required for correct input handling, but it does not demonstrate that XNNPACK improved CNN inference.
+D. Pre-processing is required for correct input handling, but it does not demonstrate that XNNPACK improved CNN inference.
 </details>
 
 
