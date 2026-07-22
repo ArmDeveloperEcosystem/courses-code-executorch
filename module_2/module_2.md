@@ -522,7 +522,7 @@ The PyTorch branch calls the `torch.nn.Module`. The ExecuTorch branch loads the
 `.pte` artifact and calls it through the ExecuTorch runtime. The source image,
 pre-processing, weights, warm-ups, and measured run count remain fixed.
 
-# 4. View the FP32 MobileNetV2benchmark results
+# 4. View the FP32 MobileNetV2 benchmark results
 
 On the Raspberry Pi, you should expect to see top-5 predictions similar
 to this:
