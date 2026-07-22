@@ -1,26 +1,28 @@
-# Module 2: YOLOv8s Object Detection with an AI Portal Model
+# Optional Next Step: Deploy a Pre-Optimized YOLOv8s Object Detector from Arm AI Portal
+### When should I use a pre-optimized AI Portal model instead of exporting and quantizing a model myself?
 
+[Module 2: YOLOv8s Object Detection with an AI Portal Model]
 > Draft status: keep this section unpublished until the AI Portal model page
 > and download path are public. When released, integrate it into Module 2. The
 > current workflow assumes access to `Arm/yolov8s-int8-xnnpack-executorch`.
 
 ## Introduction
 
+Earlier in this module, you used the full AOT path for MobileNetV2. You prepared a
+PyTorch model, lowered it to ExecuTorch with XNNPACK, quantized it with PT2E, copied
+the `.pte` artifact to the Raspberry Pi, and measured latency and
+classification output on the target.
+
 In this section, you will use a pre-optimized YOLOv8s object detection model
 packaged for ExecuTorch with XNNPACK. Instead of exporting and quantizing the
 model yourself, you will download the prepared `.pte` artifact and focus on
 application integration.
 
-Earlier in this module, you used the full AOT path for MobileNetV2: prepare a
-PyTorch model, lower it to ExecuTorch with XNNPACK, quantize it with PT2E, copy
-the `.pte` artifact to the Raspberry Pi, and measure latency and
-classification output on the target.
+Instead of exporting and quantizing locally, you download a prepared YOLOv8s INT8 ExecuTorch with XNNPACK package, run it on the Raspberry Pi, and focus on application integration: camera input, letterbox pre-processing, detector post-processing, box drawing, and latency checks.
 
-This section uses a different workflow. Instead of doing the AOT work
-yourself, you start from a model that has already been optimized for a
-specific target. The AI Portal provides a model garden where you can find
-models by task, runtime, hardware target, delegate, and quantization
-format. For this workflow, the model is:
+In this extension, “pre-optimized” means that the package already includes the ExecuTorch `.pte` artifact for the selected backend and precision. It does not mean the full product is ready. The application still owns camera input, pre-processing, post-processing, thresholds, drawing, user experience, and production validation.
+
+For this workflow, the model is:
 
 - model: YOLOv8s INT8
 - runtime: ExecuTorch
@@ -30,14 +32,14 @@ format. For this workflow, the model is:
 
 In this section, you skip local export and quantization. The work is to
 integrate a pre-optimized `.pte` artifact into an application and understand
-the preprocessing, postprocessing, and runtime checks needed around it.
+the pre-processing, post-processing, and runtime checks needed around it.
 
 | Workflow step | What changes vs stays the same in this section |
 |---|---|
 | Model preparation | Download a pre-optimized AI Portal package instead of exporting from PyTorch |
 | Quantization | Use the packaged INT8 model instead of running PTQ calibration locally |
 | Runtime | Run ExecuTorch with XNNPACK on Raspberry Pi |
-| Application work | Add camera input, YOLO preprocessing, postprocessing, and box drawing |
+| Application work | Add camera input, YOLO pre-processing, post-processing, and box drawing |
 
 YOLO stands for "You Only Look Once." It is a family of object detection models
 that predicts object locations and classes in one forward pass. YOLOv8s is the
@@ -53,10 +55,21 @@ the output is useful.
 The scripts follow the same layout used earlier in this module:
 
 - `module_2_ext/scripts/pi`: Raspberry Pi download and application entry points
-- `module_2_ext/scripts/pi/core`: YOLOv8s runtime, preprocessing, and postprocessing helpers
+- `module_2_ext/scripts/pi/core`: YOLOv8s runtime, pre-processing, and post-processing helpers
 - `module_2_ext/scripts/_support/web`: web page rendering for the webcam demo
 
 ![AI Portal model garden with YOLOv8s INT8 ExecuTorch with XNNPACK visible.](images/ai-portal-model-garden-yolov8s.png)
+
+## What will you be able to do?
+
+By the end of this extension, you will be able to:
+
+- decide when a pre-optimized AI Portal package is a better starting point than a local export and quantization workflow
+- download and verify a YOLOv8s INT8 ExecuTorch with XNNPACK package
+- run the object detector on a Raspberry Pi
+- explain the application work around the `.pte` artifact: camera capture, letterbox pre-processing, confidence filtering, non-maximum suppression, label lookup, and box drawing
+- distinguish model inference latency from end-to-end application timing
+- identify what must still be validated before production use
 
 ## AI Portal Model Garden
 
@@ -76,7 +89,36 @@ Raspberry Pi 5 with ExecuTorch and XNNPACK. It reports:
 
 ![AI Portal detail page for YOLOv8s INT8 ExecuTorch with XNNPACK.](images/ai-portal-yolov8s-model-detail.png)
 
-## Raspberry Pi Setup
+These values are model-package evidence, not a production guarantee. They help you decide whether the package is worth testing on your target setup. You still need to measure behavior in your own application because camera input, lighting, object distance, post-processing thresholds, and system load can change the observed result.
+
+### Check the model package evidence
+
+Before downloading the package, record the published model evidence:
+
+| Question | Your notes |
+|---|---|
+| What task does the model perform? | |
+| What runtime, delegate, and precision does the package use? | |
+| What target device or platform is it optimized for? | |
+| What latency, FPS, memory, and model-size values are reported? | |
+| Which metric matters most for your intended application? | |
+
+# Plan the AI Portal object detection workflow
+
+You will use a different workflow from the MobileNetV2 path:
+
+1. Find the pre-optimized YOLOv8s INT8 ExecuTorch with XNNPACK package.
+2. Download the package to the Raspberry Pi.
+3. Verify the `.pte`, label, and model specification files.
+4. Attach a USB webcam or choose a video input.
+5. Run the YOLOv8s webcam detector.
+6. Inspect the pre-processing, ExecuTorch runtime call, and post-processing code.
+7. Compare this workflow with the MobileNetV2 AOT workflow.
+8. Decide when a pre-optimized model package is a better starting point.
+
+As you work, pay attention to the engineering trade-offs: model-package trust, target compatibility, latency, memory, pre-processing requirements, post-processing cost, camera behavior, and production validation still needed.
+
+## Raspberry Pi setup
 
 Connect to the Raspberry Pi over SSH and forward the Object Detection app port:
 
@@ -95,7 +137,7 @@ source .cpu_lab_venv/bin/activate
 python -m pip install -r module_2_ext/requirements.txt
 ```
 
-## Download and Prepare the Pre-Optimized Model on the Raspberry Pi
+## Download and prepare the pre-optimized model on the Raspberry Pi
 
 Download the AI Portal model package from Hugging Face directly on the Pi:
 
@@ -169,7 +211,19 @@ The downloaded `model_spec.json` records the application contract:
 The model is already quantized, so this workflow does not run
 calibration or PT2E conversion.
 
-## Attach your USB Webcam to the Pi and Run the Webcam Detector
+### Check downloaded package files
+
+Before running the app, confirm that the package contains:
+
+- an ExecuTorch `.pte` artifact
+- `model_spec.json`
+- labels or a generated `coco_labels.json`
+- any package metadata needed to understand input shape, precision, runtime, and backend
+
+If the filenames differ from the examples in this course, use the generated `model_spec.json` rather than hard-coding the `.pte` name.
+
+
+## Attach your USB webcam to the Pi and run the webcam detector
 
 Attach a USB webcam to the Raspberry Pi. The app
 uses OpenCV camera index `0`, which is usually the first connected camera. The
@@ -193,7 +247,21 @@ end-to-end pipeline timing:
 
 ![YOLOv8s webcam object detection demo running with ExecuTorch with XNNPACK.](images/yolov8s-webcam-detection-demo.png)
 
-## Understand the Application Code
+Read the timing panel carefully. Model inference latency measures the ExecuTorch forward pass. End-to-end pipeline time also includes camera capture, letterbox pre-processing, post-processing, drawing, and web serving. For object detection, the pipeline time may matter more to the user than model inference latency alone.
+
+### Check application behavior
+
+After running the webcam detector, answer:
+
+| Application-fit question | Your conclusion |
+|---|---|
+| Did the app load the downloaded `.pte` package successfully? | |
+| Did the detector run at an acceptable latency or frame rate for the intended interaction? | |
+| Were the detected boxes and labels useful for the scene you tested? | |
+| Did camera input, lighting, or object distance affect results? | |
+| What would you validate before using this detector in production? | |
+
+## Understand the application code
 
 The app follows the same high-level pattern as the MobileNetV2 web demo:
 create a runner, accept input from an application source, call the ExecuTorch
@@ -240,7 +308,7 @@ raw_output = self.model.forward((input_tensor,))[0]
 detections = self._postprocess(raw_output, frame_bgr.shape[:2], scale, pad, 0.25, 0.45)
 ```
 
-Preprocessing uses letterboxing, which resizes the image without changing
+Pre-processing uses letterboxing, which resizes the image without changing
 its aspect ratio and pads the remaining area:
 
 ```python
@@ -257,7 +325,7 @@ The final tensor shape is `[1, 3, 640, 640]`, matching the input shape recorded
 in `model_spec.json`. The image is converted from OpenCV's BGR camera format to
 RGB, arranged as NCHW, converted to floating point, and scaled to `[0.0, 1.0]`.
 
-Postprocessing reverses the letterbox padding and scale so the boxes line up
+Post-processing reverses the letterbox padding and scale so the boxes line up
 with the original camera frame. This is where object detection differs most from
 classification:
 
@@ -285,16 +353,65 @@ selected = nms_by_class(boxes, scores[keep], class_ids[keep], iou_thres)
 These steps are part of the application integration. They are not handled by
 the `.pte` artifact unless the packaged model explicitly includes them. For
 this AI Portal package, ExecuTorch runs the YOLOv8s model, and the Python
-application handles camera capture, letterbox preprocessing, confidence
+application handles camera capture, letterbox pre-processing, confidence
 filtering, non-maximum suppression, label lookup, drawing, and web serving.
+
+## Apply the AI Portal deployment decision
+
+A team wants to add object detection to an edge camera prototype. The AI Portal has a YOLOv8s INT8 ExecuTorch with XNNPACK package for Raspberry Pi 5. The package runs on the Pi, but the webcam demo shows variable end-to-end timing under different lighting and scene complexity.
+
+Which next step is best?
+
+A. Ship the package because the AI Portal page reports latency and mAP
+
+B. Validate the package with representative camera scenes, threshold settings, pipeline timing, and memory measurements
+
+C. Re-run MobileNetV2 classification because object detection cannot run on edge CPUs
+
+D. Ignore pre-processing and post-processing because they are outside the `.pte` artifact
+
+<details>
+<summary>Answer</summary>
+
+**B. Validate the package with representative camera scenes, threshold settings, pipeline timing, and memory measurements**
+</details>
+
+
+# Decide when to use a pre-optimized AI Portal model
+
+The MobileNetV2 workflow showed how to create an optimized `.pte` artifact yourself. The YOLOv8s workflow shows a different deployment path: start from a prepared model package and focus engineering effort on integration and validation.
+| Question | MobileNetV2 workflow | YOLOv8s AI Portal workflow |
+|---|---|---|
+| Who creates the `.pte` artifact? | You export, lower, and quantize locally | The package provides a prepared `.pte` |
+| Main learner work | AOT workflow, quantization, benchmarking | Download, verify, integrate, validate |
+| Output type | Top-5 classification labels | Boxes, classes, and confidence scores |
+| Extra application code | Pre-processing, softmax, top-k | Camera capture, letterbox, confidence filtering, NMS, drawing |
+| Main deployment risk | Quantization and classification quality | Package fit, post-processing, camera behavior, end-to-end latency |
+
+
+Use a pre-optimized AI Portal model when:
+
+- the model task matches your application closely
+- the package targets your runtime, backend, precision, and hardware
+- the published latency, memory, and accuracy metrics are close to your requirements
+- you want to prototype application integration before investing in your own export and quantization flow
+
+Use the local AOT workflow instead when:
+
+- you need to modify the model architecture or training data
+- you need control over calibration, quantization, or backend choices
+- the model package does not match your target hardware or deployment constraints
+- the application requires validation beyond the published model-card metrics
+
+A strong deployment decision should connect package provenance, target compatibility, measured device behavior, pre-processing and post-processing cost, camera quality, and production validation.
 
 ## Summary
 
 This workflow uses the same target-side ExecuTorch pattern from earlier in this
 module, but starts from a pre-optimized AI Portal package. The AOT export and
 PTQ work are already done, so the main work is application integration: camera
-input, letterbox preprocessing, ExecuTorch runtime execution, detector
-postprocessing, box drawing, and checking latency on the Raspberry Pi.
+input, letterbox pre-processing, ExecuTorch runtime execution, detector
+post-processing, box drawing, and checking latency on the Raspberry Pi.
 
 ## Draft Release Checklist
 
