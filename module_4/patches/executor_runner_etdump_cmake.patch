@@ -1,0 +1,41 @@
+diff --git a/examples/arm/executor_runner/CMakeLists.txt b/examples/arm/executor_runner/CMakeLists.txt
+--- a/examples/arm/executor_runner/CMakeLists.txt
++++ b/examples/arm/executor_runner/CMakeLists.txt
+@@ -326,7 +326,7 @@ if(NOT ("${EXECUTORCH_SELECT_OPS_LIST}" STREQUAL ""
+   list(APPEND arm_executor_runner_link arm_portable_ops_lib)
+ endif()
+ 
+-if(EXECUTORCH_ENABLE_EVENT_TRACER)
++if(EXECUTORCH_ENABLE_EVENT_TRACER OR ET_DUMP_INTERMEDIATE_OUTPUTS OR ET_DUMP_OUTPUTS)
+   target_compile_options(arm_executor_runner PUBLIC -DET_EVENT_TRACER_ENABLED)
+ 
+   list(APPEND arm_executor_runner_link etdump flatccrt)
+diff --git a/backends/arm/CMakeLists.txt b/backends/arm/CMakeLists.txt
+--- a/backends/arm/CMakeLists.txt
++++ b/backends/arm/CMakeLists.txt
+@@ -63,5 +63,10 @@ if(EXECUTORCH_BUILD_ARM_BAREMETAL OR EXECUTORCH_BUILD_ARM_ETHOSU_LINUX)
+   add_library(executorch_delegate_ethos_u STATIC ${_arm_backend_sources})
+   target_link_libraries(executorch_delegate_ethos_u PUBLIC executorch_core)
++  if(EXECUTORCH_ENABLE_EVENT_TRACER OR ET_DUMP_INTERMEDIATE_OUTPUTS OR ET_DUMP_OUTPUTS)
++    target_compile_options(
++      executorch_delegate_ethos_u PUBLIC -DET_EVENT_TRACER_ENABLED
++    )
++  endif()
+ 
+   if(EXECUTORCH_BUILD_ARM_BAREMETAL)
+     target_sources(
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -508,5 +508,10 @@ if(NOT EXECUTORCH_ENABLE_LOGGING)
+   target_compile_definitions(executorch_core PUBLIC ET_LOG_ENABLED=0)
+ endif()
+ target_compile_options(executorch_core PUBLIC ${_common_compile_options})
++if(EXECUTORCH_ENABLE_EVENT_TRACER OR ET_DUMP_INTERMEDIATE_OUTPUTS OR ET_DUMP_OUTPUTS)
++  target_compile_options(
++    executorch_core PUBLIC -DET_EVENT_TRACER_ENABLED
++  )
++endif()
+ if(MAX_KERNEL_NUM)
+   target_compile_definitions(
+     executorch_core PRIVATE MAX_KERNEL_NUM=${MAX_KERNEL_NUM}

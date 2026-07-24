@@ -1,0 +1,97 @@
+diff --git a/arm_executor_runner.cpp b/arm_executor_runner.cpp
+--- a/arm_executor_runner.cpp
++++ b/arm_executor_runner.cpp
+@@ -114,6 +114,7 @@
+ 
+ #include "arm_memory_allocator.h"
+ #include "arm_perf_monitor.h"
++#include "imagenet_labels.h"
+ 
+ #if defined(ET_BUNDLE_IO)
+ #include <executorch/devtools/bundled_program/bundled_program.h>
+@@ -935,6 +936,77 @@
+ #endif
+ }
+ 
++
++constexpr int kMobileNetV2TopK = 5;
++
++void print_mobilenetv2_top_k(const Tensor& output_tensor) {
++  const ScalarType scalar_type = output_tensor.scalar_type();
++  const size_t num_classes = output_tensor.numel();
++
++  ET_LOG(
++      Info,
++      "MobileNetV2 output tensor: scalar_type=%s, numel=%lu",
++      executorch::runtime::toString(scalar_type),
++      static_cast<unsigned long>(num_classes));
++
++  int top_indices[kMobileNetV2TopK] = {0};
++  float top_values[kMobileNetV2TopK];
++  for (int j = 0; j < kMobileNetV2TopK; j++) {
++    top_values[j] = -1.0e30f;
++  }
++
++  for (size_t i = 0; i < num_classes; i++) {
++    float value = 0.0f;
++    switch (scalar_type) {
++      case ScalarType::Float:
++        value = output_tensor.const_data_ptr<float>()[i];
++        break;
++      case ScalarType::Int:
++        value = static_cast<float>(output_tensor.const_data_ptr<int>()[i]);
++        break;
++      case ScalarType::Char:
++        value = static_cast<float>(output_tensor.const_data_ptr<int8_t>()[i]);
++        break;
++      case ScalarType::Byte:
++        value = static_cast<float>(output_tensor.const_data_ptr<uint8_t>()[i]);
++        break;
++      default:
++        ET_LOG(
++            Error,
++            "Unsupported MobileNetV2 output scalar type: %s",
++            executorch::runtime::toString(scalar_type));
++        return;
++    }
++
++    for (int j = 0; j < kMobileNetV2TopK; j++) {
++      if (value > top_values[j]) {
++        for (int m = kMobileNetV2TopK - 1; m > j; m--) {
++          top_values[m] = top_values[m - 1];
++          top_indices[m] = top_indices[m - 1];
++        }
++        top_values[j] = value;
++        top_indices[j] = static_cast<int>(i);
++        break;
++      }
++    }
++  }
++
++  ET_LOG(Info, "MobileNetV2 top-%d predictions:", kMobileNetV2TopK);
++  for (int j = 0; j < kMobileNetV2TopK; j++) {
++    const int class_index = top_indices[j];
++    const char* label = class_index < kImageNetLabelCount
++        ? kImageNetLabels[class_index]
++        : "unknown";
++    ET_LOG(
++        Info,
++        "  %d. %s (class %d): %.6f",
++        j + 1,
++        label,
++        class_index,
++        static_cast<double>(top_values[j]));
++  }
++}
++
+ void print_outputs(RunnerContext& ctx) {
+   std::vector<EValue> outputs(ctx.method.value()->outputs_size());
+   ET_LOG(Info, "%lu outputs: ", static_cast<unsigned long>(outputs.size()));
+@@ -946,6 +1018,7 @@
+   for (int i = 0; i < outputs.size(); ++i) {
+     if (outputs[i].isTensor()) {
+       Tensor tensor = outputs[i].toTensor();
++      print_mobilenetv2_top_k(tensor);
+ #if !defined(SEMIHOSTING)
+ #if defined(ET_LOG_DUMP_OUTPUT)
+       // The output might be collected and parsed so printf() is used instead
