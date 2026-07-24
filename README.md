@@ -36,7 +36,7 @@ The full course uses:
 
 - Raspberry Pi 5 for Modules 1 and 2
 - Android smartphone for Module 3
-- Linux host or cloud instance for Module 4
+- Linux host or cloud instance for Modules 4 and 5
 
 If you do not have all target devices, you can still follow the
 ahead-of-time preparation scripts and either read the content without running the benchmarks on hardware, or try running them on your local development machine instead.
@@ -71,3 +71,12 @@ artifact. You will also understand how CNN model architectures delegate
 differently to XNNPACK when compared with transformer-based models, and you
 will be able to compare PyTorch eager, FP32 ExecuTorch with XNNPACK, and INT8
 ExecuTorch with XNNPACK on the same target device.
+
+### Module 4: Deploy ExecuTorch Models with Arm Ethos-U Acceleration
+
+In this module, you return to the MobileNetV2 model, and explore how to optimize and accelerate its deployment via use of an Ethos-U NPU. You will explore FP32 and INT8 Post-Training Quantization routes, and understand how the Ethos-U backend differs from the XNNPACK backend. You will become familiar with the Vela compiler and the TOSA intermediate representation.
+
+You then add an unsupported operation to split the model into two delegated
+regions, understanding how unsupported operators can impact and fragment delegation. After this, you return to the clean INT8 model, and run it on a Corstone-320 FVP simulation of the Cortex-M + Ethos-U, and inspect the generated `.pte` artifact, ETRecord, ETDump, and optional TOSA artifacts with Model Explorer. The module finishes by adapting the generic C++ runner into a MobileNetV2 classification
+application that prints ImageNet labels over UART.
+

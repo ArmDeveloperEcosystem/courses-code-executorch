@@ -9,7 +9,7 @@ an Ethos-U85, and run the resulting ExecuTorch program on a Corstone-320 Fixed
 Virtual Platform (FVP). The module compares three model variants, runs the INT8
 model on the FVP, and uses it in a simple classification application:
 
-| Model/runtime path | Role in the workflow |
+| Model/runtime path | How we use it / what it shows |
 |---|---|
 | FP32 MobileNetV2 with Ethos-U partitioning | Shows why exportable FP32 models are not automatically NPU-ready |
 | INT8 MobileNetV2 with Ethos-U | Shows the main quantized deployment path for Ethos-U |
@@ -17,8 +17,8 @@ model on the FVP, and uses it in a simple classification application:
 | INT8 MobileNetV2 on Corstone-320 FVP | Checks that the compiled `.pte` artifact executes in a simulation of the target |
 | INT8 MobileNetV2 classification app | Adds model-specific output handling to the generic runner |
 
-Optional sections cover TOSA artifact generation, ExecuTorch Inspector, Model
-Explorer, the ML Inference Advisor (MLIA), and the upstream one-command flow.
+Optional sections cover TOSA artifact generation, the ExecuTorch Inspector, Model
+Explorer, and the ML Inference Advisor (MLIA).
 
 ## NPU and Ethos-U Fundamentals
 
@@ -41,7 +41,7 @@ invokes delegated regions, and handles input, output, and application control
 flow. Any model operation outside the Ethos-U delegate needs a compatible CPU
 kernel in the target runtime.
 
-This is similar to XNNPACK delegation in Modules 1 and 2: ExecuTorch
+This is similar to XNNPACK delegation in earlier modules: ExecuTorch
 partitions the graph, and supported regions are delegated to a backend. Work
 that is not delegated remains on the default ExecuTorch path. Whether that
 work can execute depends on the kernels included in the target runtime. The
@@ -133,7 +133,7 @@ steps run on a Linux host, which also runs the FVP simulation of the target:
 - `module_4/scripts/fvp`: input tensor creation and output decoding
 - `module_4/apps/fvp_image_classifier`: a small patch that adds
   MobileNetV2 top-5 output to the upstream FVP runner
-- `module_4/patches`: build-system patches used by the module instructions
+- `module_4/patches`: the ETDump build patch for the pinned ExecuTorch revision
 - `module_4/artifacts`: generated weights, `.pte` artifacts,
   `.etrecord` files, TOSA artifacts, runners, and logs
 - `module_4/results`: optional result summaries generated during the
@@ -184,7 +184,7 @@ selected Python version.
 
 ### How This Setup Differs from Modules 1 and 2
 
-Modules 1 and 2 used prebuilt Python packages inside course virtual
+Modules 1 and 2 used prebuilt Python packages inside virtual
 environments. In those modules, setup was mostly a `pip install` step: you
 installed ExecuTorch, PyTorch, and the Python dependencies needed to export,
 lower, and run CPU examples.
@@ -204,13 +204,33 @@ The practical difference is:
 In this module, `~/executorch` is the source checkout used to build the
 runtime and runner that execute the `.pte` artifact on the Corstone FVP.
 
-Clone ExecuTorch and build the Arm backend pieces from that source checkout:
+Clone ExecuTorch and check out the revision used by this module:
 
 ```bash
-git clone https://github.com/pytorch/executorch.git ~/executorch
-cd ~/executorch
-git checkout 46812972d55f1c6029178cee18d26fefe3d4abc6
+EXECUTORCH_COMMIT=fbd14e65299071097a9b729d826cf1ad414db16f
 
+git clone https://github.com/pytorch/executorch.git ~/executorch && \
+  cd ~/executorch && \
+  git checkout --detach "$EXECUTORCH_COMMIT" && \
+  test "$(git rev-parse HEAD)" = "$EXECUTORCH_COMMIT" && \
+  echo "Using ExecuTorch commit $(git rev-parse HEAD)"
+```
+
+The final line must print:
+
+```text
+Using ExecuTorch commit fbd14e65299071097a9b729d826cf1ad414db16f
+```
+
+Do not continue if the clone, checkout, or commit check fails. If
+`~/executorch` already exists, move or remove that checkout only after checking
+whether it contains work you need to keep.
+
+After the commit has been verified, create the Python environment, install the
+Arm tools, and build the bare-metal runtime:
+
+```bash
+cd ~/executorch
 PYENV_VERSION=3.11.14 python -m venv .venv
 source .venv/bin/activate
 CMAKE_ARGS="-DEXECUTORCH_BUILD_COREML=OFF -DEXECUTORCH_BUILD_OPENVINO=OFF" \
@@ -220,26 +240,19 @@ source examples/arm/arm-scratch/setup_path.sh
 ./backends/arm/scripts/build_executorch.sh --etdump
 ```
 
-The checkout is pinned to the revision used to test this module. The expected
-commands and output later in the module assume this source layout. The
-remaining commands create `~/executorch/.venv`, install the
-ExecuTorch Python package with the Ethos-U dependencies, and build the
+The checkout is pinned to a specific commit validated for this module. The
+second command block creates `~/executorch/.venv`, installs the
+ExecuTorch Python package with the Ethos-U dependencies, and builds the
 bare-metal libraries with ETDump support.
 
 ETRecord is build-time metadata that describes the exported graph, operators,
-debug handles, and delegate partitions. ETDump is the matching runtime event
+debug handles, and delegate partitions. ETDump, enabled here, is the matching runtime event
 trace: it records what happened while the model ran, including delegate
 execution and references to captured intermediate output. ExecuTorch Inspector
-and Model Explorer combine the two artifacts to map FVP events back to the
-model graph and its Ethos-U delegate region. The `--etdump` option enables the
-runtime support needed to collect the trace.
+and Model Explorer are both tools that combine the two artifacts to map FVP events back to the
+model graph and its Ethos-U delegate region.
 
-`examples/arm/setup.sh` installs the Arm compiler, Vela, and Corstone FVP
-assets after you accept the included EULA. It also creates
-`examples/arm/arm-scratch/setup_path.sh`, which adds commands such as
-`FVP_Corstone_SSE-320` to the current shell.
-
-The first FVP run uses the upstream generic runner in:
+The first FVP run we perform will use the generic runner provided at:
 
 ```text
 ~/executorch/examples/arm/executor_runner
@@ -256,33 +269,26 @@ own filesystem. Semihosting is intended for development and simulation; a
 deployed application would obtain inputs and store outputs through its board's
 actual interfaces and storage.
 
-Later in the module, you will apply a small patch to the same runner source so
-it behaves like an image classification app and prints MobileNetV2 top-5 class
+Later in the module, you will apply a small patch to the runner to adapt it into a simple image classification app that prints MobileNetV2 top-5 class
 IDs over UART.
 
-Clone this course repo onto the Linux host, then enter the repo and activate
+Clone the course repo onto the Linux host, enter the repo, and activate
 the ExecuTorch Python environment. Install the Module 4 add-on requirements
 before running Task 1; the course scripts use TorchVision and Pillow in
 addition to the packages installed by the ExecuTorch source setup.
 
 ```bash
-git clone <course-repo-url> ~/executorch_on_arm
+git clone https://github.com/arm-education/executorch_on_arm_course.git ~/executorch_on_arm
 cd ~/executorch_on_arm
 source ~/executorch/.venv/bin/activate
 python -m pip install -r module_4/requirements.txt
 ```
 
-This keeps the Python version, ExecuTorch Python package, Arm backend, Vela
-tooling, FVP scripts, and built runtime libraries aligned with the same
-ExecuTorch checkout. The Module 4 requirements file adds the extra Python
-packages used by the course scripts without replacing the PyTorch and torchao
-packages installed by ExecuTorch. That alignment matters because the `.pte`
-artifact, ETRecord/ETDump support, and FVP runner are produced by different
-parts of the same source tree.
-
 ## Task 1: Prepare MobileNetV2 and Try FP32 Ethos-U Lowering
 
-Start by preparing the same MobileNetV2 family used in Module 2.
+Start by preparing the same MobileNetV2 model used in Module 2. The preparation step is similar to Module 2. The difference is the target:
+these artifacts will be used for Ethos-U lowering and FVP execution rather
+than for a Cortex-A CPU.
 
 Run on the Linux host:
 
@@ -291,16 +297,9 @@ python module_4/scripts/aot/prepare_mobilenetv2.py \
   --out module_4/artifacts/mobilenetv2
 ```
 
-This downloads the same TorchVision MobileNetV2 `IMAGENET1K_V1` weights and
-public-domain yellow Labrador image used in Module 2, saves a state dict,
-writes ImageNet labels, and creates `model_spec.json`.
-
-The preparation step is similar to Module 2. The difference is the target:
-these artifacts will be used for Ethos-U lowering and FVP execution rather
-than Cortex-A CPU.
-
-The preparation script loads the pretrained TorchVision model and saves the
-weights and labels locally:
+The preparation script downloads the same TorchVision MobileNetV2 `IMAGENET1K_V1` weights and
+public-domain yellow Labrador image used in Module 2, saves a state dict, and
+writes ImageNet labels:
 
 ```python
 weights = MobileNet_V2_Weights.IMAGENET1K_V1
@@ -310,13 +309,7 @@ torch.save(model.state_dict(), weights_path)
 labels_path.write_text(json.dumps(weights.meta["categories"], indent=2) + "\n")
 ```
 
-Pinning the same weight version and input image as Module 2 makes the CPU and
-Ethos-U classification results directly comparable. Saving the weights and
-labels in `module_4/artifacts/mobilenetv2` keeps the AOT scripts and FVP helper
-scripts using the same model data. The ImageNet labels are also used later when
-the raw FVP output tensor is decoded on the Linux host.
-
-The script also writes the model input shape and preprocessing settings:
+The script also writes the model input shape and preprocessing settings and creates `model_spec.json`:
 
 ```python
 spec = {
@@ -339,9 +332,6 @@ spec = {
 The shape `[1, 3, 224, 224]` is one RGB image in NCHW order: batch, channels,
 height, and width. The resize, crop, mean, and standard deviation are the
 ImageNet preprocessing values expected by the pretrained MobileNetV2 model.
-Later scripts read the same `model_spec.json` for export, calibration, raw FVP
-input generation, and output decoding, so the model is not accidentally tested
-with different image preprocessing at different stages.
 
 Now take your FP32 MobileNetV2 model, and attempt to lower it to ExecuTorch with the Ethos-U target:
 
@@ -356,35 +346,28 @@ python module_4/scripts/aot/lower_fp32_ethosu.py \
 You should expect to see output similar to this:
 
 ```text
-Exporting FP32 MobileNetV2...
-Lowering with Ethos-U target ethos-u85-256...
-Wrote module_4/artifacts/mobilenetv2/mobilenetv2_fp32_ethosu.pte
 PTE size: 14.24 MB
 
 Delegation
 ==========
 Ethos-U delegate call sites: 0
 Fallback call_function ops:  463
-  <built-in function getitem> (52)
-  <function alloc at ...> (257)
-  <function view at ...> (1)
+
+Selected non-delegated operators:
   aten._native_batch_norm_legit_no_training.out (52)
   aten.add.out (10)
   aten.addmm.out (1)
   aten.convolution.out (52)
   aten.hardtanh.out (35)
   aten.mean.out (1)
-  aten.permute_copy.out (1)
-  dim_order_ops._clone_dim_order.out (1)
-Observation: no Ethos-U delegation was detected for FP32.
 ```
 
 The script writes a `.pte` artifact, but the delegation summary shows
-that no region was handed to Ethos-U. The listed `call_function` operations are
-the work that remains outside the Ethos-U delegate after the lowering
-attempt. The important line is `Ethos-U delegate call sites: 0`: this FP32
-artifact is packaged for ExecuTorch, but it is not an NPU-accelerated
-MobileNetV2 artifact.
+that no region was handed to Ethos-U. The selected operators show that the
+MobileNetV2 convolutions, batch normalization, activations, and classifier
+remain outside the Ethos-U delegate. The important line is
+`Ethos-U delegate call sites: 0`: this FP32 artifact is packaged for
+ExecuTorch, but it is not an NPU-accelerated MobileNetV2 artifact.
 
 The script follows the same basic export-and-lower pattern used in Module 2.
 It reloads the MobileNetV2 weights prepared earlier, creates an example tensor
@@ -431,25 +414,20 @@ is `ethos-u85-256`, the system configuration is
 
 This result is expected. Ethos-U acceleration is designed around supported
 quantized integer workloads. An FP32 `.pte` artifact can still be generated,
-but that is not the same as NPU acceleration.
+but that is not the same as NPU acceleration. The operations would have to fallback to a CPU instead.
 
 When you inspect this artifact later in Model Explorer, the graph remains an
 FP32 program rather than an Ethos-U delegated program:
 
 - no `EthosUBackend` delegate node
 - many visible `aten::` operators
-- MobileNetV2 input and output shapes from `[1, 3, 224, 224]` to `[1, 1000]`
 
-This shows why quantization matters for Ethos-U. Without it, Vela cannot
-compile any part of the model for the NPU. For this FP32 run, the graph is
-still visible as individual ATen operations, including convolutions, batch
-normalization, hardtanh, and the classifier `addmm`.
-
-### Task 1 Summary
+### Task 1 Takeaway
 
 The FP32 model is exportable, but it has zero Ethos-U delegate calls. A `.pte`
 artifact proves that ExecuTorch packaged the program; it does not prove that
-the NPU can execute its compute.
+the NPU can execute its compute. This shows why quantization matters for Ethos-U. Without it, Vela cannot
+compile any part of the model for the NPU.
 
 ## Task 2: Quantize MobileNetV2 and Lower It to Ethos-U
 
@@ -464,7 +442,7 @@ python module_4/scripts/aot/create_calibration_images.py \
 
 This is the same local calibration method used in Module 2. The script creates
 cropped, resized, and mirrored variants in an ImageFolder-compatible
-directory. A product model should be calibrated and evaluated with separate
+directory. A production model should be calibrated and evaluated with separate
 images that match the
 camera, lighting, composition, and subjects used by the application.
 
@@ -538,6 +516,17 @@ Ethos-U lowering. Both should place `Labrador retriever` and `golden retriever`
 near the top. This check catches incorrect weights, preprocessing, or
 calibration before the backend compilation step.
 
+The prediction comparison should look similar to this:
+
+| Model | Top prediction | Second prediction | Top-1/top-2 logit margin |
+|---|---:|---:|---:|
+| FP32 | Labrador retriever: 63.93% | golden retriever: 34.00% | 0.6313 |
+| Converted INT8 | Labrador retriever: 76.46% | golden retriever: 21.97% | 1.2474 |
+
+Both models classify the sample as a Labrador retriever. The higher INT8
+confidence on this image does not show that INT8 improves accuracy across a
+dataset; it only shows how quantization changed this output distribution.
+
 The `--etrecord` option keeps a copy of the lowered edge program before
 packaging. ETRecord uses this graph metadata later when runtime events are
 mapped back to the program:
@@ -549,17 +538,12 @@ program = edge.to_executorch(
 )
 ```
 
-Generated artifacts:
+The generated INT8 `.pte` artifact should be about 3.59 MB, and the terminal
+should print an ExecuTorch delegation summary similar to:
 
 ```text
-module_4/artifacts/mobilenetv2/mobilenetv2_int8_ethosu.pte
-module_4/artifacts/mobilenetv2/mobilenetv2_int8_ethosu.etrecord
-module_4/artifacts/mobilenetv2/mobilenetv2_int8_ethosu.json
-```
+PTE size: 3.59 MB
 
-The terminal should also print an ExecuTorch delegation summary similar to:
-
-```text
 Delegation
 ==========
 Ethos-U delegate call sites: 1
@@ -579,12 +563,16 @@ Vela prints the NPU assignment before ExecuTorch writes the `.pte` artifact.
 For MobileNetV2, you should expect a summary like this:
 
 ```text
+Total SRAM used                               1474.72 KiB
+Total DRAM used                               3494.75 KiB
 CPU operators = 0 (0.0%)
 NPU operators = 55 (100.0%)
+Total SRAM bandwidth            per input     30.84 MB/inference (batch size 1)
+Total DRAM bandwidth            per input      3.44 MB/inference (batch size 1)
 Neural network macs                         300987520 MACs/batch
 ```
 
-### Read the Vela Report
+### Read and understand the Vela Report
 
 Vela prints one report for each graph region sent to it. For INT8 MobileNetV2,
 one report corresponds to one large delegated region.
@@ -603,8 +591,7 @@ one report corresponds to one large delegated region.
   the values are compiler estimates rather than measurements from a board.
 
 Use the report to check operator support and memory planning for the selected
-target. Do not convert its MAC or bandwidth values into a latency or power
-claim. Final performance and energy measurements require the intended hardware.
+target. Final performance and energy measurements require the intended hardware.
 
 ### Task 2 Summary
 
@@ -613,7 +600,7 @@ Ethos-U85. The model forms one large delegated region, while the
 pre-lowering prediction comparison checks that the quantized result remains
 useful for the sample image.
 
-## Task 3: Add an Operator and Compare Delegation Boundaries
+## Task 3: Add an Unsupported Operator and Compare Delegation Outcomes
 
 Local Response Normalization (LRN) rescales each activation using values from
 nearby channels at the same spatial position. It was used in some earlier CNNs
@@ -648,37 +635,32 @@ def forward(self, image):
     return self.classifier(x)
 ```
 
-In the current Ethos-U flow, the supported operations on either side of the LRN
-path still compile through Vela, but `aten.avg_pool3d.out` remains non-delegated
-between two NPU-delegated regions. Vela therefore generates two Ethos-U command
-streams instead of one.
+The supported operations on either side of the LRN path still compile through
+Vela, but `aten.avg_pool3d.out` remains non-delegated between two NPU-delegated
+regions. Vela therefore generates two Ethos-U command streams instead of one.
 
-For the LRN variant, you should expect two Vela network summaries. A run can
-look like this:
+Compare the baseline report with the two LRN-region reports:
 
-```text
-CPU operators = 0 (0.0%)
-NPU operators = 59 (100.0%)
+| Graph region | NPU operators | SRAM used | DRAM used | Estimated DRAM traffic | MACs |
+|---|---:|---:|---:|---:|---:|
+| Baseline INT8 | 55 | 1474.72 KiB | 3494.75 KiB | 3.44 MB/inference | 300,987,520 |
+| LRN region 1 | 59 | 1474.72 KiB | 2301.31 KiB | 71.88 MB/inference | 299,833,156 |
+| LRN region 2 | 5 | 262.50 KiB | 1194.08 KiB | 1.17 MB/inference | 1,468,160 |
 
-CPU operators = 0 (0.0%)
-NPU operators = 5 (100.0%)
-```
+These are per-region compiler estimates, not measured latency. The reports
+show that the LRN variant is split into two compilable NPU regions and that its
+estimated memory traffic differs substantially from the baseline.
 
-This means Vela compiled two Ethos-U command streams instead of one. The
-script then packages the model and prints the top-level ExecuTorch delegation
+The script then packages the model and prints the top-level ExecuTorch delegation
 summary. You should expect output similar to this:
 
 ```text
-Wrote module_4/artifacts/mobilenetv2/mobilenetv2_lrn_int8_ethosu.pte
-PTE size: 3.46 MB
-Wrote module_4/artifacts/mobilenetv2/mobilenetv2_lrn_int8_ethosu.etrecord
+PTE size: 3.60 MB
 
 Delegation
 ==========
 Ethos-U delegate call sites: 2
 Fallback call_function ops:  13
-  <built-in function getitem> (3)
-  <function alloc at ...> (5)
   aten.avg_pool3d.out (1)
   cortex_m.dequantize_per_tensor.out (2)
   cortex_m.quantize_per_tensor.out (2)
@@ -689,9 +671,9 @@ reports what each NPU command stream contains. ExecuTorch reports the top-level
 `.pte` artifact graph: two Ethos-U delegate calls plus small operations around
 the delegate boundaries. The `cortex_m.quantize_per_tensor` and
 `cortex_m.dequantize_per_tensor` entries are the boundary q/dq nodes that the
-script rewrites before packaging. `getitem` and `alloc` are small allocation and
-output-selection operations. `aten.avg_pool3d.out` is the operation left
-between the two delegated regions in this variant.
+script rewrites before packaging. The omitted `getitem` and `alloc` entries are
+small output-selection and allocation operations. `aten.avg_pool3d.out` is the
+operation left between the two delegated regions in this variant.
 
 A single-delegate pattern looks like:
 
@@ -709,7 +691,7 @@ The second pattern still uses the NPU, but moving between two delegates can add
 q/dq operations, synchronization, and tensor movement.
 
 Whether the non-delegated operation can execute on a target CPU also depends on the
-kernels included in that target runtime.
+kernels included in that target runtime, and even if it can execute, it could add a lot of additional overhead, bottlenecking your application, and potentially obscuring benefits gained through NPU acceleration.
 
 ### Task 3 Summary
 
@@ -777,9 +759,9 @@ should expect:
 
 ```text
 Dumping MobileNetV2 FP32: TOSA-1.0+FP
-  1 .tosa files in module_4/artifacts/tosa/mobilenetv2_fp32
+  1 .tosa file in module_4/artifacts/tosa/mobilenetv2_fp32
 Dumping MobileNetV2 INT8: TOSA-1.0+INT
-  1 .tosa files in module_4/artifacts/tosa/mobilenetv2_int8
+  1 .tosa file in module_4/artifacts/tosa/mobilenetv2_int8
 Dumping MobileNetV2 LRN INT8: TOSA-1.0+INT
   2 .tosa files in module_4/artifacts/tosa/mobilenetv2_lrn_int8
 ```
@@ -900,15 +882,16 @@ consistent.
 ETDump is disabled in a standard ExecuTorch build. The setup command used
 `build_executorch.sh --etdump`, which enables the event tracer and builds the
 ETDump libraries for the target runtime. The runner build below also uses
-`--etdump`. In the pinned build script, that option passes:
+`--etdump`, which enables the event tracer and intermediate-output capture:
 
 ```text
 -DEXECUTORCH_ENABLE_EVENT_TRACER=ON
 -DET_DUMP_INTERMEDIATE_OUTPUTS=ON
 ```
 
-Apply the provided patch once to make the tracing configuration explicit for
-each component built by this workflow:
+In this ExecuTorch revision, those CMake settings do not consistently add the
+tracer definition to every target in the standalone runner build. Apply the
+provided patch from the ExecuTorch repository root:
 
 ```bash
 cd ~/executorch
@@ -916,9 +899,9 @@ git apply ~/executorch_on_arm/module_4/patches/executor_runner_etdump_cmake.patc
 cd ~/executorch_on_arm
 ```
 
-The patch defines `ET_EVENT_TRACER_ENABLED` for ExecuTorch core, the Ethos-U
-delegate, and the runner whenever ETDump output is requested. It also ensures
-that the runner links `etdump` and `flatccrt`:
+The patch explicitly defines `ET_EVENT_TRACER_ENABLED` for ExecuTorch core, the
+Ethos-U delegate, and the runner when ETDump capture is requested. It also makes
+the runner link the `etdump` and `flatccrt` libraries:
 
 ```cmake
 if(EXECUTORCH_ENABLE_EVENT_TRACER OR
@@ -931,9 +914,8 @@ if(EXECUTORCH_ENABLE_EVENT_TRACER OR
 endif()
 ```
 
-The `--etdump` options request tracing and build the required libraries. The
-patch ensures that ExecuTorch core, the Ethos-U delegate, and the runner are all
-compiled with the same tracer definition.
+This keeps the tracer definition consistent across the components that create
+and record runtime events.
 
 Build a runner containing the baseline INT8 `.pte` artifact:
 
@@ -969,7 +951,6 @@ FVP_Corstone_SSE-320 \
   -C mps4_board.subsystem.cpu0.semihosting-stack_base=0 \
   -C mps4_board.subsystem.cpu0.semihosting-heap_limit=0 \
   -C "mps4_board.subsystem.cpu0.semihosting-cwd=$(realpath module_4/artifacts/fvp_runs/mobilenetv2_int8)" \
-  -C "mps4_board.subsystem.ethosu.extra_args=--fast" \
   -C "mps4_board.subsystem.cpu0.semihosting-cmd_line=executor_runner -o out -i i0.bin" \
   -a "$(realpath module_4/artifacts/fvp_runner/mobilenetv2_int8/arm_executor_runner)" \
   --timelimit 600 \
@@ -983,6 +964,7 @@ Reading input tensor 1 from file i0.bin
 Running method forward
 NPU Inferences : 1
 NPU delegations: 1 (1.00 per inference)
+ethosu_pmu_cycle_cntr : 2804702 (2804702.00 per inference)
 Writing output to file: out-0.bin
 Writing etdump debug_buffer to file: debug_buffer.bin
 Writing etdump to file: etdump.bin
@@ -992,7 +974,10 @@ Program complete, exiting.
 This confirms that the runner loaded the program, passed the prepared image to
 MobileNetV2, invoked one Ethos-U delegate, wrote the raw model output, and
 captured ETDump runtime events. The FVP also prints PMU counters. Use them to
-confirm NPU activity, not as final hardware performance measurements.
+confirm NPU activity and inspect simulated execution timing, not as final
+hardware performance measurements. The command does not enable the Ethos-U
+`--fast` option, so the Ethos-U timing model reports NPU cycle and activity
+counters. A timed simulation takes longer to run.
 
 ### Decode the Output
 
@@ -1098,10 +1083,17 @@ python -m executorch.devtools.inspector.inspector_cli \
 ```
 
 Inspector should map `DELEGATE_CALL` to `EthosUBackend` and write the TSV file.
-On this FVP/runtime combination, its timestamp and cycle columns remain zero.
-The useful result is the runtime event structure and graph mapping. Optional
-TorchAO-extension and fake-operator warnings do not invalidate a table that is
-successfully printed and written.
+The timed FVP run reports the Ethos-U PMU cycle count in the terminal. ETDump
+timestamps are different: the runner records them using the Arm CPU PMU cycle
+counter, which does not advance in this FVP configuration. Inspector can still
+show the runtime event structure and map the delegate call to the ETRecord, but
+its event durations are zero.
+
+An ETDump with event timing requires a timing-capable target on which the CPU
+PMU counter is enabled, such as a suitable FPGA or the target hardware. It must
+be captured with the matching ETRecord. Repeated inferences are needed for
+percentile statistics, and final performance measurements should be taken on
+the target hardware rather than inferred from one FVP run.
 
 ## Inspect the Artifacts with Model Explorer
 
@@ -1111,12 +1103,35 @@ FP32, baseline INT8, and LRN `.pte` artifacts. Earlier modules did not use
 ETRecord, ETDump, or TOSA in Model Explorer. This module introduces those
 artifact types and the additional adapters needed to open them.
 
+When Model Explorer runs on a remote instance but you open its interface in
+the development-machine browser, the browser's file picker can only access
+files on the development machine. Copy the artifact folder back before opening
+the models. From the repository root on your development machine, use `rsync`
+to copy only the files needed by Model Explorer:
+
+```bash
+mkdir -p module_4/artifacts
+
+rsync -av --prune-empty-dirs \
+  -e "ssh -i PATH_TO_KEY.pem" \
+  --include='mobilenetv2/' \
+  --include='mobilenetv2/*.pte' \
+  --include='mobilenetv2/*.etrecord' \
+  --include='tosa/***' \
+  --exclude='*' \
+  ubuntu@INSTANCE_IP:~/executorch_on_arm/module_4/artifacts/ \
+  ./module_4/artifacts/
+```
+
+This excludes generated runners, model weights, calibration images, FVP input
+and output tensors, and logs.
+
 Create a separate environment on the Linux host for these extensions. This
 keeps their web dependencies out of the ExecuTorch build environment:
 
 ```bash
 cd ~/executorch_on_arm
-python3 -m venv .model_explorer_venv
+~/executorch/.venv/bin/python -m venv .model_explorer_venv
 source .model_explorer_venv/bin/activate
 python -m pip install \
   ai-edge-model-explorer \
@@ -1124,11 +1139,11 @@ python -m pip install \
   tosa-adapter-model-explorer
 ```
 
-If Model Explorer runs on a remote Linux host, open an SSH tunnel from your
-development machine:
+Open an SSH tunnel from your development machine to the Model Explorer server
+on the AWS instance:
 
 ```bash
-ssh -L 8081:localhost:8081 ubuntu@YOUR_INSTANCE
+ssh -i PATH_TO_KEY.pem -L 8081:localhost:8081 ubuntu@INSTANCE_IP
 ```
 
 Start the server:
@@ -1136,12 +1151,10 @@ Start the server:
 ```bash
 model-explorer \
   --port 8081 \
-  --extensions=executorch_extension_model_explorer,tosa_adapter_model_explorer \
+  --extensions=executorch_extension_model_explorer,tosa_adapter_model_explorer
 ```
 
 Open `http://localhost:8081` in the development-machine browser.
-
-![Model Explorer interface](images/model_explorer/model_explorer.png)
 
 ### Compare the `.pte` Artifacts
 
@@ -1197,26 +1210,19 @@ operation splits the supported graph into two regions:
 
 ![Second TOSA region from fragmented MobileNetV2](images/model_explorer/tosa_ethos_int8_frag_2.png)
 
-### Add the ETDump Overlay
+### ETRecord and ETDump Timing Overlay
 
-Create a copy with an extension recognized by the Model Explorer ExecuTorch
-extension:
+The first version of the ExecuTorch Model Explorer extension uses ETDump timing
+data as per-node data on an ETRecord graph. The ETDump generated by this FVP run
+contains the runtime events used by Inspector, but its CPU PMU timestamps are
+zero, so it cannot produce this timing overlay.
 
-```bash
-cp module_4/artifacts/fvp_runs/mobilenetv2_int8/etdump.bin \
-  module_4/artifacts/fvp_runs/mobilenetv2_int8/etdump.etdp
-```
+The following reference view was captured with a timing-capable ETDump. It
+shows the runtime data providers on the right and the single Ethos-U delegate
+region in the graph. Producing this view requires an ETDump from suitable FPGA
+or target hardware and the matching `.etrecord` file.
 
-Open `mobilenetv2_int8_ethosu.etrecord`, choose **Add per-node data**, select
-the ETDump profiling overlay, and load:
-
-```text
-module_4/artifacts/fvp_runs/mobilenetv2_int8/etdump.etdp
-```
-
-The overlay connects runtime events to the ETRecord graph. Look for the single
-`EthosUBackend` delegate call and the small quantize/dequantize boundary around
-it. The FVP trace may not provide nonzero timing columns.
+![ETRecord graph with a clean INT8 Ethos-U ETDump overlay](images/model_explorer/ethos_int8_profile.png)
 
 Stop Model Explorer with `Ctrl+C`, then return to the ExecuTorch environment
 before continuing:
@@ -1392,7 +1398,6 @@ FVP_Corstone_SSE-320 \
   -C mps4_board.subsystem.cpu0.semihosting-stack_base=0 \
   -C mps4_board.subsystem.cpu0.semihosting-heap_limit=0 \
   -C "mps4_board.subsystem.cpu0.semihosting-cwd=$(realpath module_4/artifacts/fvp_runs/mobilenetv2_classifier)" \
-  -C "mps4_board.subsystem.ethosu.extra_args=--fast" \
   -C "mps4_board.subsystem.cpu0.semihosting-cmd_line=executor_runner -o out -i i0.bin" \
   -a "$(realpath module_4/artifacts/fvp_runner/mobilenetv2_classifier/arm_executor_runner)" \
   --timelimit 600 \
@@ -1578,7 +1583,7 @@ D. That all non-delegated work has been eliminated
 software environment**
 </details>
 
-## Optional: Explore MLEK and Physical Boards
+## Optional Next Steps: Explore ML Embedded Evaluation Kit and Physical Boards
 
 You may wish to explore:
 

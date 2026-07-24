@@ -138,7 +138,8 @@ def dump_tosa(exported: Any, profile: str, out_dir: Path, label: str) -> None:
             compile_config=EdgeCompileConfig(_check_ir_validity=False),
         )
     tosa_files = sorted(out_dir.rglob("*.tosa"))
-    print(f"  {len(tosa_files)} .tosa files in {out_dir}")
+    file_label = "file" if len(tosa_files) == 1 else "files"
+    print(f"  {len(tosa_files)} .tosa {file_label} in {out_dir}")
 
 
 def export_no_guards(model: Any, example_inputs: tuple[Any, ...]) -> Any:

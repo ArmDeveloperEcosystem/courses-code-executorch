@@ -371,6 +371,11 @@ def configure_quiet_output() -> None:
     os.environ.setdefault("PYTHONWARNINGS", "ignore")
     warnings.filterwarnings("ignore", category=FutureWarning)
     warnings.filterwarnings("ignore", category=UserWarning, message="The given buffer is not writable.*")
+    warnings.filterwarnings(
+        "ignore",
+        category=UserWarning,
+        message=r"erase_node\(.*\) on an already erased node",
+    )
     logging.getLogger().setLevel(logging.ERROR)
 
 
