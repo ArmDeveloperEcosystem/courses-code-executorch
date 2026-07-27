@@ -1,15 +1,26 @@
 cmake_minimum_required(VERSION 3.20)
 project(ethosu_cpp_reference LANGUAGES C CXX)
 
+if(NOT CMAKE_BUILD_TYPE)
+  set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type" FORCE)
+endif()
+
+if(NOT CMAKE_SYSTEM_PROCESSOR STREQUAL "cortex-m85")
+  message(
+    FATAL_ERROR
+    "Corstone-320 requires TARGET_CPU=cortex-m85; configure with -DTARGET_CPU=cortex-m85"
+  )
+endif()
+
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 set(ET_DIR_PATH "$ENV{HOME}/executorch" CACHE PATH "Path to the ExecuTorch source tree")
 set(
   ET_BUILD_DIR_PATH
-  "${ET_DIR_PATH}/cmake-out-arm"
+  "${CMAKE_CURRENT_SOURCE_DIR}/../../artifacts/fvp_runner/mobilenetv2_int8"
   CACHE PATH
-  "Path to the installed bare-metal ExecuTorch build"
+  "Path to the Module 4 runner build for this PTE"
 )
 set(ET_PTE_FILE_PATH "" CACHE FILEPATH "Path to the lowered ExecuTorch program")
 set(ET_INPUT_FILE_PATH "" CACHE FILEPATH "Path to the prepared input tensor bytes")
@@ -21,14 +32,52 @@ set(
   "Path to the Ethos-U core platform and driver sources"
 )
 
-foreach(required_path ET_DIR_PATH ET_PTE_FILE_PATH ET_INPUT_FILE_PATH ET_LABELS_FILE_PATH)
+foreach(required_path ET_DIR_PATH ET_BUILD_DIR_PATH ET_PTE_FILE_PATH ET_INPUT_FILE_PATH ET_LABELS_FILE_PATH)
   if(NOT EXISTS "${${required_path}}")
     message(FATAL_ERROR "${required_path} does not exist: ${${required_path}}")
   endif()
 endforeach()
 
 find_package(Python3 REQUIRED COMPONENTS Interpreter)
-find_package(executorch REQUIRED HINTS "${ET_BUILD_DIR_PATH}/lib/cmake/ExecuTorch")
+
+load_cache(
+  "${ET_BUILD_DIR_PATH}"
+  READ_WITH_PREFIX ET_RUNNER_
+  EXECUTORCH_ENABLE_EVENT_TRACER
+)
+
+set(ET_BUILD_LIB_DIR "${ET_BUILD_DIR_PATH}/executorch")
+set(
+  ET_REQUIRED_LIBRARIES
+  "${ET_BUILD_LIB_DIR}/libexecutorch.a"
+  "${ET_BUILD_LIB_DIR}/libexecutorch_core.a"
+  "${ET_BUILD_LIB_DIR}/backends/arm/libexecutorch_delegate_ethos_u.a"
+  "${ET_BUILD_LIB_DIR}/backends/cortex_m/libcortex_m_kernels.a"
+  "${ET_BUILD_LIB_DIR}/backends/cortex_m/libcortex_m_ops_lib.a"
+  "${ET_BUILD_LIB_DIR}/backends/cortex_m/cmsis_nn-build/libcmsis-nn.a"
+  "${ET_BUILD_LIB_DIR}/kernels/portable/libportable_kernels.a"
+  "${ET_BUILD_LIB_DIR}/kernels/portable/cpu/util/libkernels_util_all_deps.a"
+  "${ET_BUILD_LIB_DIR}/kernels/quantized/libquantized_kernels.a"
+  "${ET_BUILD_LIB_DIR}/kernels/quantized/libquantized_ops_lib.a"
+)
+foreach(required_library IN LISTS ET_REQUIRED_LIBRARIES)
+  if(NOT EXISTS "${required_library}")
+    message(FATAL_ERROR "Required Module 4 library does not exist: ${required_library}")
+  endif()
+endforeach()
+
+if(ET_RUNNER_EXECUTORCH_ENABLE_EVENT_TRACER)
+  set(
+    ET_TRACING_LIBRARIES
+    "${ET_BUILD_LIB_DIR}/devtools/etdump/libetdump.a"
+    "${ET_DIR_PATH}/third-party/flatcc/lib/libflatccrt.a"
+  )
+  foreach(required_library IN LISTS ET_TRACING_LIBRARIES)
+    if(NOT EXISTS "${required_library}")
+      message(FATAL_ERROR "Required ETDump library does not exist: ${required_library}")
+    endif()
+  endforeach()
+endif()
 
 include(${ET_DIR_PATH}/backends/arm/scripts/corstone_utils.cmake)
 fetch_ethos_u_content(${ETHOS_SDK_PATH} ${ET_DIR_PATH})
@@ -92,26 +141,38 @@ target_include_directories(
   PRIVATE
     ${ET_DIR_PATH}/..
     ${ET_DIR_PATH}/runtime/core/portable_type/c10
+    ${ET_BUILD_LIB_DIR}/include
     ${GENERATED_DIR}
 )
 target_compile_definitions(
-  ethosu_cpp_reference PRIVATE C10_USING_CUSTOM_GENERATED_MACROS
+  ethosu_cpp_reference
+  PRIVATE
+    C10_USING_CUSTOM_GENERATED_MACROS
 )
+if(ET_RUNNER_EXECUTORCH_ENABLE_EVENT_TRACER)
+  target_compile_definitions(ethosu_cpp_reference PRIVATE ET_EVENT_TRACER_ENABLED)
+endif()
 
 target_link_libraries(
   ethosu_cpp_reference
   PUBLIC
-    executorch
     ethosu_target_init
-    quantized_ops_lib
-    portable_kernels
-    cortex_m_kernels
-    cortex_m_ops_lib
+    "-Wl,--start-group"
+    "-Wl,--whole-archive"
+    ${ET_BUILD_LIB_DIR}/libexecutorch.a
+    ${ET_BUILD_LIB_DIR}/kernels/quantized/libquantized_ops_lib.a
+    ${ET_BUILD_LIB_DIR}/backends/cortex_m/libcortex_m_ops_lib.a
+    ${ET_BUILD_LIB_DIR}/backends/arm/libexecutorch_delegate_ethos_u.a
+    ${ET_BUILD_LIB_DIR}/kernels/quantized/libquantized_kernels.a
+    ${ET_BUILD_LIB_DIR}/backends/cortex_m/libcortex_m_kernels.a
+    ${ET_BUILD_LIB_DIR}/kernels/portable/libportable_kernels.a
+    ${ET_BUILD_LIB_DIR}/libexecutorch_core.a
+    ${ET_BUILD_LIB_DIR}/backends/cortex_m/cmsis_nn-build/libcmsis-nn.a
+    ${ET_TRACING_LIBRARIES}
+    "-Wl,--no-whole-archive"
+    ${ET_BUILD_LIB_DIR}/kernels/portable/cpu/util/libkernels_util_all_deps.a
+    "-Wl,--end-group"
 )
-
-include(${ET_DIR_PATH}/tools/cmake/Utils.cmake)
-executorch_target_link_options_shared_lib(executorch_delegate_ethos_u)
-target_link_libraries(ethosu_cpp_reference PUBLIC executorch_delegate_ethos_u)
 
 if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
   set(LINK_FILE_EXT ld)
@@ -125,7 +186,7 @@ execute_process(
   COMMAND
     ${CMAKE_C_COMPILER}
     ${COMPILER_PREPROCESSOR_OPTIONS}
-    -DETHOSU_ARENA=0
+    -DETHOSU_ARENA=1
     -o ${LINK_FILE_OUT}
     ${ET_DIR_PATH}/examples/arm/executor_runner/Corstone-320.ld
   COMMAND_ERROR_IS_FATAL ANY

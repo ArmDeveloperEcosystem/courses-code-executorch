@@ -11,6 +11,10 @@
 #include <executorch/runtime/executor/program.h>
 #include <executorch/runtime/platform/log.h>
 
+#if defined(ET_EVENT_TRACER_ENABLED)
+#include <executorch/devtools/etdump/etdump_flatcc.h>
+#endif
+
 #include "app_config.h"
 
 namespace app {
@@ -108,8 +112,15 @@ executorch::runtime::Error run_model(
   MemoryManager memory_manager(
       &method_allocator, &planned_memory, &temporary_allocator);
 
-  Result<Method> method =
-      program->load_method(*method_name, &memory_manager);
+#if defined(ET_EVENT_TRACER_ENABLED)
+  executorch::etdump::ETDumpGen event_tracer;
+  executorch::runtime::EventTracer* event_tracer_ptr = &event_tracer;
+#else
+  executorch::runtime::EventTracer* event_tracer_ptr = nullptr;
+#endif
+
+  Result<Method> method = program->load_method(
+      *method_name, &memory_manager, event_tracer_ptr);
   if (!method.ok()) {
     ET_LOG(
         Error,

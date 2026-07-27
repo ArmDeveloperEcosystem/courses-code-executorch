@@ -25,25 +25,64 @@ structure easier to adapt for a physical board.
 
 ## Build
 
-Complete the Module 4 AOT and input-preparation tasks first. You need:
+Complete the Module 4 AOT, input-preparation, and **Build the ETDump-Enabled
+Runner** steps first. You do not need to run that runner on the FVP before
+building this application. The earlier build step is required because this
+application reuses the target-specific ExecuTorch libraries it produces.
+
+You need:
 
 - `mobilenetv2_int8_ethosu.pte`
 - `i0.bin`
 - `imagenet_labels.json`
-- an installed bare-metal ExecuTorch build under `~/executorch/cmake-out-arm`
+- the Module 4 runner build under
+  `module-4-ethos-npu-accelerated-inference/artifacts/fvp_runner/mobilenetv2_int8`
+
+The runner build directory contains the ExecuTorch runtime, Ethos-U delegate,
+kernel, and CMSIS libraries compiled for the same U85 target and tracing
+configuration. Reusing them avoids compiling a second copy and keeps the
+application ABI consistent with the runner build.
+
+In each new shell, activate the ExecuTorch environment and add the downloaded
+Arm toolchain to `PATH`:
+
+```bash
+cd ~/executorch
+source .venv/bin/activate
+source examples/arm/arm-scratch/setup_path.sh
+command -v arm-none-eabi-gcc
+cd ~/executorch_on_arm
+```
+
+The `command -v` check must print the full path to `arm-none-eabi-gcc`. If it
+prints nothing, rerun this command before continuing:
+
+```bash
+~/executorch/examples/arm/setup.sh --i-agree-to-the-contained-eula
+```
 
 Configure the application from the course repository root:
 
 ```bash
-cmake \
+cmake --fresh \
   -S module-4-ethos-npu-accelerated-inference/apps/ethosu_cpp_reference \
   -B module-4-ethos-npu-accelerated-inference/artifacts/fvp_runner/ethosu_cpp_reference \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DTARGET_CPU=cortex-m85 \
   -DCMAKE_TOOLCHAIN_FILE="$HOME/executorch/examples/arm/ethos-u-setup/arm-none-eabi-gcc.cmake" \
   -DET_DIR_PATH="$HOME/executorch" \
   -DET_PTE_FILE_PATH="$PWD/module-4-ethos-npu-accelerated-inference/artifacts/mobilenetv2/mobilenetv2_int8_ethosu.pte" \
   -DET_INPUT_FILE_PATH="$PWD/module-4-ethos-npu-accelerated-inference/artifacts/fvp_runs/mobilenetv2_int8/i0.bin" \
   -DET_LABELS_FILE_PATH="$PWD/module-4-ethos-npu-accelerated-inference/artifacts/mobilenetv2/imagenet_labels.json"
 ```
+
+`TARGET_CPU=cortex-m85` selects the Corstone-320 startup files and CMSIS device
+definitions. CMake reads the runner build's event-tracing setting and applies
+the same setting to the application because it is part of the runtime ABI. If
+ETDump is enabled, the application links the ETDump and FlatCC libraries and
+passes an `ETDumpGen` event tracer to `Program::load_method()`. It does not
+capture intermediate tensors or print an ETDump payload; the tracer is present
+to match the runtime configuration used by the runner build.
 
 Build the ELF:
 
@@ -52,6 +91,11 @@ cmake --build \
   module-4-ethos-npu-accelerated-inference/artifacts/fvp_runner/ethosu_cpp_reference \
   --target ethosu_cpp_reference -j2
 ```
+
+The Arm linker may report `_gettimeofday`, RWX segment, `.ddr`, or `.sram`
+warnings while producing the bare-metal ELF. The upstream Module 4 runner uses
+the same platform linker script and reports the same warnings. Continue if the
+build finishes with `Built target ethosu_cpp_reference`.
 
 Run it on the Corstone-320 FVP:
 
@@ -66,6 +110,21 @@ FVP_Corstone_SSE-320 \
   -C mps4_board.subsystem.ethosu.extra_args=--fast \
   -a module-4-ethos-npu-accelerated-inference/artifacts/fvp_runner/ethosu_cpp_reference/ethosu_cpp_reference
 ```
+
+For the Labrador sample image, the output should end with a result similar to:
+
+```text
+Top-5 predictions:
+  1. Labrador retriever (class 208): 14.136751
+  2. golden retriever (class 207): 12.889391
+  3. tennis ball (class 852): 8.211789
+Application inference completed
+Application exit code: 0.
+```
+
+The exact logits can change with model or toolchain versions. The top labels
+show that the embedded input reached the model, while exit code `0` confirms
+that the `.pte` loaded, delegated execution completed, and outputs were read.
 
 ## Adapt the Scaffold
 
