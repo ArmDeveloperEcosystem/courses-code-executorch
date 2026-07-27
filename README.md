@@ -1,5 +1,8 @@
 # Optimize and Deploy AI Inference with ExecuTorch on Arm
 
+[![Repository integrity](https://github.com/arm-education/executorch_on_arm_v2/actions/workflows/repo-integrity.yml/badge.svg?branch=main)](https://github.com/arm-education/executorch_on_arm_v2/actions/workflows/repo-integrity.yml)
+[![Module 3 Android](https://github.com/arm-education/executorch_on_arm_v2/actions/workflows/module-3-android.yml/badge.svg?branch=main)](https://github.com/arm-education/executorch_on_arm_v2/actions/workflows/module-3-android.yml)
+
 A hands-on course for deploying PyTorch models to Arm CPUs and NPUs with
 ExecuTorch. The course walks through ahead-of-time model preparation,
 backend delegation and graph inspection, post-training quantization, and runtime benchmarking and example applications across a range of hardware targets.
@@ -14,7 +17,7 @@ This course is best used in parallel with the ExecuTorch Documentation.
 
 **Course length:** 8-10 hours
 
-**Authors:** Matt Cossins, Marcelo Rovai
+**Author:** Matt Cossins, with contributions from Marcelo Rovai
 
 **Main technologies:** PyTorch, ExecuTorch, XNNPACK, KleidiAI, Model Explorer, Cortex-A, Cortex-M, Ethos-U, TOSA,
 Vela, Corstone-320, Transformers, LLMs, CNNs
@@ -30,18 +33,25 @@ You should be comfortable with basic Python and familiar with core
 machine learning concepts such as models, tensors, inference, and
 quantization. You do not need prior ExecuTorch experience - this is ideal for beginners with ExecuTorch.
 
+You are encouraged to use AI Agents when taking this course, and skills are provided to aid your understanding, and next steps. See Module 0 for more information.
+
 ## Hardware and Environment
 
 The full course uses:
 
 - Raspberry Pi 5 for Modules 1 and 2
-- Android smartphone for Module 3
-- Linux host or cloud instance for Modules 4 and 5
+- Android smartphone or Emulation via Android Studio for Module 3
+- Linux host or cloud instance for Module 4
 
 If you do not have all target devices, you can still follow the
 ahead-of-time preparation scripts and either read the content without running the benchmarks on hardware, or try running them on your local development machine instead.
 
 ## Course Modules
+
+### Module 0: Course and ExecuTorch Overview
+
+Introduces ExecuTorch, the ahead-of-time deployment workflow, the course
+hardware targets, and the optional AI-agent learning modes.
 
 ### Module 1: Get started with ExecuTorch and Understand Delegation - Transformer Inference on Arm Cortex-A CPU
 
@@ -72,6 +82,28 @@ differently to XNNPACK when compared with transformer-based models, and you
 will be able to compare PyTorch eager, FP32 ExecuTorch with XNNPACK, and INT8
 ExecuTorch with XNNPACK on the same target device.
 
+### Module 3: ExecuTorch on Mobile - Using the XNNPACK Backend on Android for Semantic Segmentation
+
+In this module, you move from Edge Linux deployment on a Raspberry Pi to an
+Android application. You will prepare an LR-ASPP MobileNetV3 semantic
+segmentation model, lower an FP32 version with XNNPACK, and validate its object
+cutout output on the development machine. You will then apply post-training
+quantization, compare the FP32 and INT8 results, and select the INT8 `.pte`
+artifact for the mobile application.
+
+You will package the model, labels, and preprocessing settings as Android
+assets and run the application on a physical Arm phone or an Android Studio
+emulator. The Java application uses the ExecuTorch Android API to load the
+model, create input tensors, run `forward()`, interpret the semantic
+segmentation logits, and produce an image with a transparent background.
+
+By the end, you will understand what changes when moving an ExecuTorch
+application from Python on Edge Linux to Java or Kotlin on Android, including
+application assets, native ABIs, lifecycle management, background inference,
+and native runtime cleanup. You will also understand where XNNPACK CPU
+execution fits alongside other mobile options such as iOS, device NPUs, SME2,
+and the Arm VGF backend for neural graphics workloads.
+
 ### Module 4: Deploy ExecuTorch Models with Arm Ethos-U Acceleration
 
 In this module, you return to the MobileNetV2 model, and explore how to optimize and accelerate its deployment via use of an Ethos-U NPU. You will explore FP32 and INT8 Post-Training Quantization routes, and understand how the Ethos-U backend differs from the XNNPACK backend. You will become familiar with the Vela compiler and the TOSA intermediate representation.
@@ -79,4 +111,3 @@ In this module, you return to the MobileNetV2 model, and explore how to optimize
 You then add an unsupported operation to split the model into two delegated
 regions, understanding how unsupported operators can impact and fragment delegation. After this, you return to the clean INT8 model, and run it on a Corstone-320 FVP simulation of the Cortex-M + Ethos-U, and inspect the generated `.pte` artifact, ETRecord, ETDump, and optional TOSA artifacts with Model Explorer. The module finishes by adapting the generic C++ runner into a MobileNetV2 classification
 application that prints ImageNet labels over UART.
-

@@ -16,42 +16,15 @@ __pycache__/
 .idea/
 .vscode/
 *.swp
+*.local-before-remote.md
+*.remote-main.md
 
 # Course benchmark outputs
 module_*/results/*
 !module_*/results/.gitkeep
 
-# Generated model/export/lowering artifacts
-module_*/artifacts/**/*.pte
-module_*/artifacts/**/*.pt
-module_*/artifacts/**/*.pt2
-module_*/artifacts/**/*.pth
-module_*/artifacts/**/*.etrecord
-module_*/artifacts/**/*.etdump
-module_*/artifacts/**/*.etdp
-module_*/artifacts/**/*.bin
-module_*/artifacts/**/*.onnx
-module_*/artifacts/**/*.tflite
-module_*/artifacts/**/*.tosa
-module_*/artifacts/**/*.npy
-module_*/artifacts/**/*.npz
-module_*/artifacts/**/*.tar
-module_*/artifacts/**/*.tar.gz
-module_*/artifacts/**/*.tgz
-module_*/artifacts/**/*.zip
-
-# Generated lowering metadata, while keeping specs/labels visible by default
-module_*/artifacts/**/*_portable.json
-module_*/artifacts/**/*_xnnpack.json
-module_*/artifacts/**/*_ethosu.json
-
-# Generated datasets, calibration sets, and validation images
-module_*/artifacts/**/data/
-module_*/artifacts/**/segmentation_data/
-module_*/artifacts/**/calibration_source/
-module_*/artifacts/**/calibration_images/
-module_*/artifacts/**/validation/
-module_*/artifacts/**/validation_int8/
+# Generated model data, downloads, datasets, exports, and lowering artifacts
+module_*/artifacts/
 
 # Android local build outputs
 module_*/android/**/.gradle/
@@ -65,3 +38,7 @@ module_*/android/**/src/main/assets/**/*.pte
 module_*/android/**/src/main/assets/**/*.pt
 module_*/android/**/src/main/assets/**/*.pt2
 module_*/android/**/src/main/assets/**/*.pth
+
+# Module 3 synchronizes generated model data into the Android project
+module_3/android/**/src/main/assets/model_spec.json
+module_3/android/**/src/main/assets/voc_labels.json

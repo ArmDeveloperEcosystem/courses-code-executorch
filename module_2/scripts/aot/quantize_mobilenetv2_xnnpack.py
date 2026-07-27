@@ -23,7 +23,7 @@ def main() -> None:
         help="ImageFolder directory used for PTQ calibration.",
     )
     parser.add_argument("--out", type=Path, default=None, help="Output INT8 .pte path.")
-    parser.add_argument("--num-calib", type=int, default=100)
+    parser.add_argument("--num-calib", type=int, default=16)
     parser.add_argument("--quantize-classifier-head", action="store_true")
     args = parser.parse_args()
 

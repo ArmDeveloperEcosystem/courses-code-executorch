@@ -407,6 +407,14 @@ edge = to_edge_transform_and_lower(
 )
 ```
 
+{{% notice ExecuTorch API Highlight %}}
+`EthosUCompileSpec` records the target NPU, system configuration, memory mode,
+and Vela options used by the Arm backend. `EthosUPartitioner` uses this
+configuration when identifying regions that can lower through TOSA and be
+compiled by Vela. The partitioner is supplied to the same
+`to_edge_transform_and_lower()` API used with XNNPACK in earlier modules.
+{{% /notice %}}
+
 The compile specification tells the Arm backend which NPU target,
 system configuration, and memory mode to use. In this module, the target
 is `ethos-u85-256`, the system configuration is
@@ -475,6 +483,13 @@ quantizer.set_global(get_symmetric_quantization_config())
 prepared = prepare_pt2e(graph_module, quantizer)
 ```
 
+{{% notice ExecuTorch API Highlight %}}
+`EthosUQuantizer` supplies the quantization rules for the selected Ethos-U
+compile specification. `get_symmetric_quantization_config()` creates the
+symmetric INT8 configuration applied by `set_global()`. PyTorch PT2E then uses
+that backend policy during preparation, calibration, and conversion.
+{{% /notice %}}
+
 The calibration loop is the same PTQ pattern introduced in Module 2:
 
 ```python
@@ -501,6 +516,13 @@ Cortex-M-compatible equivalents so `to_executorch()` can write the final
 ```python
 edge = replace_boundary_quant_nodes(edge)
 ```
+
+{{% notice ExecuTorch API Highlight %}}
+The helper calls `edge.transform([ReplaceQuantNodesPass()])` to apply an
+ExecuTorch pass to the lowered edge program. `ReplaceQuantNodesPass()` replaces
+quantize and dequantize operations at delegate boundaries with forms supported
+by the Cortex-M runtime used in this deployment.
+{{% /notice %}}
 
 CMSIS-NN is Arm's library of optimized neural-network kernels for Cortex-M
 CPUs. An operator that is not delegated to Ethos-U does not automatically use
@@ -537,6 +559,26 @@ program = edge.to_executorch(
     config=ExecutorchBackendConfig(extract_delegate_segments=False)
 )
 ```
+
+{{% notice ExecuTorch API Highlight %}}
+`edge.to_executorch()` converts the edge program to its deployable ExecuTorch
+representation. `ExecutorchBackendConfig` controls packaging options. Here,
+`extract_delegate_segments=False` keeps the delegate data within the generated
+program rather than extracting it as a separate segment.
+{{% /notice %}}
+
+The script then writes the matching ETRecord:
+
+```python
+generate_etrecord(str(path), edge_for_etrecord, program)
+```
+
+{{% notice ExecuTorch API Highlight %}}
+`generate_etrecord()` combines the lowered edge graph with the packaged
+ExecuTorch program to create build-time debugging metadata. Inspector later
+uses this metadata to map runtime ETDump events back to operators and delegate
+regions.
+{{% /notice %}}
 
 The generated INT8 `.pte` artifact should be about 3.59 MB, and the terminal
 should print an ExecuTorch delegation summary similar to:
@@ -878,6 +920,24 @@ ExecuTorch runtime, links the Ethos-U delegate and supporting libraries, and
 embeds the model in the final bare-metal ELF. You normally use the wrapper
 script rather than invoking CMake directly because it keeps these settings
 consistent.
+
+The runner handles the embedded ExecuTorch runtime sequence on behalf of the
+application. In simplified form, the relevant calls are:
+
+```cpp
+executorch::runtime::runtime_init();
+Result<Program> program = Program::load(&loader);
+Result<Method> method = program->load_method("forward", &memory_manager);
+method->execute();
+```
+
+{{% notice ExecuTorch API Highlight %}}
+`runtime_init()` initializes the platform runtime, `Program::load()` parses
+the `.pte` data, and `load_method()` creates the executable method using the
+supplied memory manager. `Method::execute()` runs that method. The Arm executor
+runner includes error handling, input setup, tracing, and allocator management
+around these calls.
+{{% /notice %}}
 
 ETDump is disabled in a standard ExecuTorch build. The setup command used
 `build_executorch.sh --etdump`, which enables the event tracer and builds the

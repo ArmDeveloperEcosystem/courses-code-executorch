@@ -93,7 +93,7 @@ Module 1, this can mean:
 INT8 quantization changes model weights and, where supported, activations from
 FP32 to a lower-precision representation. This reduces storage and memory
 bandwidth requirements and can make optimized integer kernels available.
-Quantization also introduces numerical approximation, so confidence scores and, 
+Quantization also introduces numerical approximation, so confidence scores and,
 occasionally, prediction rankings can change. The relevant check is whether the
 model still gives useful results on images like the ones the application will
 see.
@@ -182,13 +182,15 @@ module_2/scripts/aot/prepare_mobilenetv2.py \
 
 The script downloads the MobileNetV2 weights through TorchVision, saves the
 state dictionary, writes the ImageNet labels and `model_spec.json`, and attempts
-to download a sample dog image for benchmarking. TorchVision is the PyTorch
-library that provides common computer vision datasets, image transforms, and
-pretrained vision models.
+to download a CC0 Labrador image from Wikimedia Commons for benchmarking.
+For the default image, the script verifies the SHA256 before using it.
+TorchVision is the PyTorch library that provides common computer vision
+datasets, image transforms, and pretrained vision models.
 
 You should expect to see output similar to this:
 
 ```text
+Downloading sample image to module_2/artifacts/mobilenetv2/sample.jpg...
 Wrote module_2/artifacts/mobilenetv2/mobilenet_v2.pth
 Wrote module_2/artifacts/mobilenetv2/imagenet_labels.json
 Wrote module_2/artifacts/mobilenetv2/sample.jpg
@@ -203,6 +205,10 @@ The four files have distinct roles:
 - `sample.jpg`: the image used by the benchmark and demo commands
 - `model_spec.json`: the image size, layout, and preprocessing settings used by
   export, benchmarking, quantization, and the web demo
+
+The model specification also records the sample image source, license, author,
+and SHA256. If you pass a different `--sample-url`, you can provide its expected
+hash with `--sample-sha256`.
 
 This step creates the PyTorch-side inputs for later export and lowering. It does
 not create an ExecuTorch program.
@@ -323,6 +329,13 @@ edge = to_edge_transform_and_lower(
 )
 program = edge.to_executorch()
 ```
+
+{{% notice ExecuTorch API Highlight %}}
+This is the same ExecuTorch lowering API used in Module 1.
+`to_edge_transform_and_lower()` creates the edge program,
+`XnnpackPartitioner()` selects supported regions for CPU delegation, and
+`to_executorch()` creates the deployable program.
+{{% /notice %}}
 
 `torch.export` captures a fixed-shape PyTorch program using the input shape in
 `model_spec.json`. `to_edge_transform_and_lower()` converts the exported
@@ -529,11 +542,11 @@ to this:
 
 | Rank | Label | Score |
 |---:|---|---:|
-| 1 | Staffordshire bullterrier | 71.62% |
-| 2 | bull mastiff | 13.37% |
-| 3 | French bulldog | 8.97% |
-| 4 | American Staffordshire terrier | 5.01% |
-| 5 | boxer | 0.82% |
+| 1 | Labrador retriever | 63.93% |
+| 2 | golden retriever | 34.00% |
+| 3 | tennis ball | 0.36% |
+| 4 | Rhodesian ridgeback | 0.18% |
+| 5 | Brittany spaniel | 0.14% |
 
 Example latency measurements are:
 
@@ -615,59 +628,77 @@ classification results, not by requiring bit-for-bit agreement with FP32.
 
 ## Create the calibration image set
 
-Run on the development machine:
+Run on the development machine. Start with the same sample image used by the
+benchmark and demo:
 
 ```bash
 module_2/scripts/aot/create_calibration_images.py \
   --out module_2/artifacts/mobilenetv2/calibration_images \
-  --images-per-class 10
+  --source-image module_2/artifacts/mobilenetv2/sample.jpg \
+  --count 16
 ```
-
-On its first run, the script downloads the CIFAR-10 archive. This can take
-several minutes. TorchVision or NumPy may also print a deprecation warning while
-the archive is unpacked.
 
 You should expect to see output similar to this:
 
 ```text
-Saved calibration images:
-  airplane: 10 images
-  automobile: 10 images
-  bird: 10 images
-  cat: 10 images
-  deer: 10 images
-  dog: 10 images
-  frog: 10 images
-  horse: 10 images
-  ship: 10 images
-  truck: 10 images
+Wrote 16 calibration images to module_2/artifacts/mobilenetv2/calibration_images
+Source images: 1
 ```
 
-The result is a small ImageFolder-style subset containing 100 images across ten
-classes. This is a lab calibration set, not a production recommendation. It is intentionally small so the workflow runs quickly. A production calibration set should match the deployed camera, lighting, image composition, and expected object distribution.
+The script creates deterministic crop, resize, and horizontal-flip variants of
+the local image. This avoids downloading a separate dataset and keeps the PTQ
+example tied to the same image path used by the benchmark and application.
+Calibration still performs its normal job: observers record activation ranges
+while representative tensors pass through the prepared model.
 
-The script downloads CIFAR-10 once and writes the selected images into class
-folders:
+The generated files are placed in an ImageFolder-style class directory named
+`local`:
 
 ```python
-dataset = datasets.CIFAR10(
-    root=args.data_root,
-    train=True,
-    download=True,
-    transform=transforms.ToTensor(),
-)
+class_dir = out_dir / "local"
+class_dir.mkdir(parents=True, exist_ok=True)
 
-for image, label in dataset:
-    class_dir = args.out / class_name
-    save_image(image, class_dir / f"img_{index:04d}.jpg")
+for index in range(count):
+    source = source_paths[index % len(source_paths)]
+    with Image.open(source) as image:
+        variant = make_variant(image.convert("RGB"), index)
+        variant.save(class_dir / f"img_{index:04d}.jpg", quality=95)
 ```
 
-The directory layout allows the quantization script to load the data with
-`torchvision.datasets.ImageFolder`. Calibration does not train the model and
-does not use the labels as targets. It only supplies realistic input values for
-the observers.
+Each source image is reused with several crop scales, and every other variant
+is flipped horizontally:
 
-![CIFAR-10 calibration images used for MobileNetV2 post-training quantization.](images/mobilenetv2-calibration-image-grid.png)
+```python
+scale = (1.0, 0.92, 0.84, 0.76)[index % 4]
+resized = image.crop((left, top, left + crop_width, top + crop_height)).resize(
+    (width, height),
+    Image.Resampling.BICUBIC,
+)
+if index % 2:
+    resized = resized.transpose(Image.Transpose.FLIP_LEFT_RIGHT)
+```
+
+The `local` folder lets the quantization script load the files with
+`torchvision.datasets.ImageFolder`. Calibration does not train the model and
+does not use the folder name as a target label.
+
+A single source image is enough to demonstrate the conversion workflow, but it
+is not representative production calibration data. To use several images,
+replace `--source-image` with `--source-dir /path/to/images`. Production
+calibration should match the deployed camera, lighting, image composition, and
+expected object distribution.
+
+Public datasets such as CIFAR-10 can provide a larger and more varied set of
+calibration inputs than one sample image. The example below contains 100 images
+across its ten classes:
+
+![CIFAR-10 image subset that could be used to broaden a calibration experiment.](images/mobilenetv2-calibration-image-grid.png)
+
+CIFAR-10 images are low resolution and cover a limited set of object classes,
+so the dataset should not automatically be treated as production calibration
+data. Use it in production only if it resembles the application's real input
+distribution. Otherwise, collect images from the intended cameras, users, and
+operating conditions.
 
 ## Quantize and lower the model
 
@@ -675,7 +706,7 @@ the observers.
 module_2/scripts/aot/quantize_mobilenetv2_xnnpack.py \
   --spec module_2/artifacts/mobilenetv2/model_spec.json \
   --calibration-images module_2/artifacts/mobilenetv2/calibration_images \
-  --num-calib 100
+  --num-calib 16
 ```
 
 The script runs PT2E post-training quantization with the XNNPACK quantizer,
@@ -685,7 +716,7 @@ XNNPACK, and writes the INT8 `.pte` artifact.
 You should expect to see output similar to this:
 
 ```text
-Calibrating on up to 100 images from module_2/artifacts/mobilenetv2/calibration_images...
+Calibrating on up to 16 images from module_2/artifacts/mobilenetv2/calibration_images...
 Wrote module_2/artifacts/mobilenetv2/mobilenetv2_int8_xnnpack.pte
 INT8 PTE size: 7.59 MB
 FP32 PTE size: 13.99 MB
@@ -738,6 +769,15 @@ quantizer.set_global(get_symmetric_quantization_config(is_per_channel=True))
 if not args.quantize_classifier_head:
     quantizer.set_filter_function(skip_classifier_head)
 ```
+
+{{% notice ExecuTorch API Highlight %}}
+`XNNPACKQuantizer` is the quantization interface supplied by the ExecuTorch
+XNNPACK backend. `set_global()` applies the selected quantization
+configuration to supported graph operations. The optional
+`set_filter_function()` call excludes selected operations—in this case the
+classifier head—from quantization. `prepare_pt2e()` and `convert_pt2e()` are
+PyTorch PT2E APIs that apply this backend policy.
+{{% /notice %}}
 
 The global configuration requests symmetric quantization with per-channel
 weight quantization where supported. Per-channel quantization gives each output
@@ -852,15 +892,10 @@ module_2/scripts/pi/benchmark_mobilenetv2.py \
   --out ~/executorch_on_arm/module_2/results/mobilenetv2_int8_xnnpack.json
 ```
 
-On the Raspberry Pi, you should expect to see output similar to this:
-
-| Rank | Label | Score |
-|---:|---|---:|
-| 1 | Staffordshire bullterrier | 88.9% |
-| 2 | French bulldog | 4.2% |
-| 3 | American Staffordshire terrier | 4.1% |
-| 4 | bull mastiff | 2.7% |
-| 5 | boxer | 0.1% |
+On the Raspberry Pi, `Labrador retriever` and `golden retriever` should remain
+the leading predictions. Quantization changes confidence values and may change
+the lower-ranked classes, so compare the class ordering with the FP32 result
+rather than expecting identical percentages.
 
 The latency result was:
 
@@ -868,10 +903,8 @@ The latency result was:
 |---|---:|---:|---:|---:|---:|---:|
 | INT8 ExecuTorch with XNNPACK | 10 | 50 | 4.01 ms | 3.98 ms | 3.95 ms | 4.56 ms |
 
-The top prediction remained `Staffordshire bullterrier`, and the same five dog
-breeds appeared in the top five, although their scores and order changed. Such
-numerical differences are expected after quantization. For this sample, the
-classification output remained useful.
+The INT8 result should preserve the Labrador classification even though the
+scores and lower-ranked classes may change.
 
 Mean latency fell from 10.89 ms for FP32 ExecuTorch with XNNPACK to 4.01 ms for
 the INT8 path. Relative to the 72.55 ms PyTorch eager reference, the INT8 path
@@ -1017,6 +1050,14 @@ probabilities = torch.nn.functional.softmax(output[0], dim=0)
 scores, indices = torch.topk(probabilities, topk)
 ```
 
+{{% notice ExecuTorch API Highlight %}}
+The Python binding passes method inputs as a tuple, even when the model has
+only one input. `model.forward((input_tensor,))` returns the method outputs as
+a sequence, so `[0]` selects MobileNetV2's classification tensor. Softmax and
+top-k selection are application postprocessing rather than part of the
+ExecuTorch program.
+{{% /notice %}}
+
 The uploaded image is converted to the normalized tensor described by
 `model_spec.json`. The ExecuTorch program returns logits; softmax and top-k
 selection convert them to labels and confidence scores.
@@ -1028,7 +1069,7 @@ inference, and translate the raw output into application behavior.
 The demo displays the uploaded image, the top-5 predictions, and latency for the
 INT8 ExecuTorch with XNNPACK artifact:
 
-![MobileNetV2 classifier demo showing uploaded image and top-5 predictions.](images/mobilenetv2-classifier-demo.png)
+![MobileNetV2 classifier demo showing sample.jpg, the Labrador image, and its top-5 predictions.](images/mobilenetv2-classifier-demo.png)
 
 ## Check application behavior
 
@@ -1130,7 +1171,9 @@ The takeaway is:
 
 ## Calibration trade-off: demo images versus production distribution
 
-The CIFAR-10 calibration set is enough to demonstrate PTQ mechanics, but production calibration should reflect the images the deployed app will actually see.
+Sixteen variants of one sample image are enough to demonstrate PTQ mechanics,
+but production calibration should reflect the images the deployed application
+will actually receive.
 
 The takeaway is:
 

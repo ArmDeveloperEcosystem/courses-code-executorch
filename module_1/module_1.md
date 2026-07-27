@@ -379,8 +379,6 @@ metadata_path = out.with_suffix(".json")
 metadata_path.write_text(json.dumps(metadata, indent=2) + "\n")
 ```
 
-The key ExecuTorch API here is `to_edge_transform_and_lower()`. It takes the exported PyTorch program, converts it into ExecuTorch's edge representation, applies the lowering passes, and optionally uses a backend partitioner to mark supported subgraphs for delegation. For the full API surface around export and lowering, see the [ExecuTorch export API reference](https://docs.pytorch.org/executorch/stable/export-to-executorch-api-reference.html).
-
 Inside our `lower()` helper, the backend choice controls whether ExecuTorch uses no partitioner or the XNNPACK partitioner:
 
 ```python
@@ -394,6 +392,16 @@ edge = to_edge_transform_and_lower(
 )
 return edge.to_executorch(), inspect_delegation(edge)
 ```
+
+{{% notice ExecuTorch API Highlight %}}
+`to_edge_transform_and_lower()` converts a PyTorch `ExportedProgram` to the
+ExecuTorch edge representation and applies backend lowering. Passing
+`XnnpackPartitioner()` identifies graph regions that XNNPACK can execute.
+`edge.to_executorch()` packages the result as the runtime program written to
+the `.pte` file. See the [ExecuTorch export API
+reference](https://docs.pytorch.org/executorch/stable/export-to-executorch-api-reference.html)
+for the complete export and lowering API.
+{{% /notice %}}
 
 The delegation summary printed by the script walks the
 lowered graph, counts calls to the ExecuTorch delegate operator, and
@@ -667,6 +675,13 @@ def forward() -> object:
         return model.forward(inputs)
 ```
 
+{{% notice ExecuTorch API Highlight %}}
+`load_executorch_program()` is a course helper around the ExecuTorch portable
+Python binding `_load_for_executorch()`. It loads the serialized `.pte`
+program and returns a module whose exported `forward` method accepts the
+expected tuple of input tensors.
+{{% /notice %}}
+
 The timing loop runs a few warmup passes first, then records the execution time of each run in milliseconds:
 
 ```python
@@ -853,6 +868,13 @@ next_token = torch.multinomial(
 input_ids = torch.cat([input_ids, next_token], dim=1)
 attention_mask = torch.cat([attention_mask, torch.ones_like(next_token)], dim=1)
 ```
+
+{{% notice ExecuTorch API Highlight %}}
+A loaded ExecuTorch method can be invoked repeatedly. Here,
+`model.forward()` runs once for each generated token, while the application
+updates the token IDs and attention mask between calls. The `.pte` program
+does not implement the generation loop; the application does.
+{{% /notice %}}
 
 Because OPT is a decoder-only, autoregressive language model, it does not produce a whole answer in one forward pass. It predicts the next token, then the application decides what to do with that token. The app loop is therefore part of the product behavior, not just a benchmark wrapper.
 
@@ -1303,7 +1325,7 @@ The takeaway is:
 
 ## Runtime trade-off: portable baseline versus target latency
 
-PyTorch eager execution is the baseline, not the enemy. If the full PyTorch stack is acceptable on your target and meets the latency target, it may be a reasonable choice. 
+PyTorch eager execution is the baseline. If the full PyTorch stack is acceptable on your target and meets the latency target, it may be a reasonable choice.
 Portable ExecuTorch is a deployability baseline, but it is not necessarily a performance path. If portable ExecuTorch runs much slower than PyTorch eager, treat that result as a signal that this model may need backend optimization, quantization, a smaller model, or a different target. 
 ExecuTorch with XNNPACK becomes interesting when it improves measured latency enough to matter for the application. 
 
@@ -1321,7 +1343,7 @@ The takeaway is:
 
 ## Application trade-off: decoder generation versus encoder prediction
 The application demos show that successful execution is necessary, but not enough. OPT-125M is a decoder-only autoregressive workload. The benchmark measures one next-token forward pass, but the chatbot demo performs repeated decode steps. Application responsiveness therefore depends on the generation loop, token count, sampling behavior, and whether the app uses optimizations such as a KV cache. 
-DistilBERT is an encoder-style prediction workload. The autocomplete demo is closer to a single request/response pattern because it runs one forward pass and turns the returned logits into suggestions. Do not read this as “DistilBERT is always better than OPT.” Read it as a workload trade-off: model architecture affects deployment suitability.
+DistilBERT is an encoder-style prediction workload. The autocomplete demo is closer to a single request/response pattern because it runs one forward pass and turns the returned logits into suggestions. Although this typically means that DistilBERT has better performance than OPT, they are different workloads, and one cannot be typically substituted for the other. This simply means that often it is the case that different applications and model architectures will have different baselines for what is considered acceptable latency.
 
 The takeaway is: 
 
