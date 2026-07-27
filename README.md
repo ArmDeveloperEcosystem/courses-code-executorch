@@ -22,7 +22,9 @@ This course is best used in parallel with the ExecuTorch Documentation.
 **Main technologies:** PyTorch, ExecuTorch, XNNPACK, KleidiAI, Model Explorer, Cortex-A, Cortex-M, Ethos-U, TOSA,
 Vela, Corstone-320, Transformers, LLMs, CNNs
 
-**License:** Creative Commons Attribution-ShareAlike 4.0
+**License:** [Creative Commons Attribution-ShareAlike 4.0](LICENSE)
+
+**Contributing:** [Corrections, new modules, and demo applications are welcome](CONTRIBUTING.md)
 
 ## Who This Is For
 
@@ -61,6 +63,10 @@ After comparing your original PyTorch models, your ExecuTorch Portable models, a
 
 Finally, you will run example applications for each - a simple Chatbot, and a simple autocomplete application.
 
+| OPT-125M chatbot | DistilBERT autocomplete |
+| --- | --- |
+| ![OPT-125M chatbot running with ExecuTorch on Raspberry Pi.](module-1-transformer-inference-with-xnnpack/images/opt125m-chatbot-demo.png) | ![DistilBERT autocomplete running with ExecuTorch on Raspberry Pi.](module-1-transformer-inference-with-xnnpack/images/distilbert-autocomplete-demo.png) |
+
 By the end, you will have completed a typical `ahead-of-time` preparation flow, and deployed your prepared models in applications on target hardware. You will be able to discuss when and why to delegate to optimized backends like XNNPACK, and how you can use tools like Model Explorer to visualize graph changes after delegation has occurred. You will be ready to move onto Module 2, where you will cover image classification, and will also explore Quantization in ExecuTorch.
 
 ### [Module 2: CNN Inference on Arm Cortex-A CPU and Optimize with INT8 Quantization](module-2-cnn-inference-with-quantization/module_2.md)
@@ -74,6 +80,8 @@ You will then add post-training quantization
 `.pte` artifact. This lets you compare FP32 and INT8 deployment tradeoffs:
 artifact size, target-side latency, delegation, and top-5 classification
 output. You will again run an example application, a simple image classifier web app.
+
+![MobileNetV2 image-classification application showing the sample image and top-five predictions.](module-2-cnn-inference-with-quantization/images/mobilenetv2-classifier-demo.png)
 
 By the end, you will be confident quantizing models with post-training
 quantization and explaining the benefits and tradeoffs of an INT8 `.pte`
@@ -97,6 +105,12 @@ emulator. The Java application uses the ExecuTorch Android API to load the
 model, create input tensors, run `forward()`, interpret the semantic
 segmentation logits, and produce an image with a transparent background.
 
+<p align="center">
+  <img src="module-3-executorch-on-android-semantic-segmentation/images/android-emulator-dog-cutout-result.png" width="300" alt="Labrador background removed by the ExecuTorch semantic-segmentation application in an Android emulator.">
+</p>
+
+*The Android application uses the segmentation mask to remove the image background.*
+
 By the end, you will understand what changes when moving an ExecuTorch
 application from Python on Edge Linux to Java or Kotlin on Android, including
 application assets, native ABIs, lifecycle management, background inference,
@@ -111,3 +125,5 @@ In this module, you return to the MobileNetV2 model, and explore how to optimize
 You then add an unsupported operation to split the model into two delegated
 regions, understanding how unsupported operators can impact and fragment delegation. After this, you return to the clean INT8 model, and run it on a Corstone-320 FVP simulation of the Cortex-M + Ethos-U, and inspect the generated `.pte` artifact, ETRecord, ETDump, and optional TOSA artifacts with Model Explorer. The module finishes by adapting the generic C++ runner into a MobileNetV2 classification
 application that prints ImageNet labels over UART.
+
+![Model Explorer showing an ETDump profiling overlay for the INT8 MobileNetV2 Ethos-U delegate.](module-4-ethos-npu-accelerated-inference/images/model_explorer/ethos_int8_profile.png)
