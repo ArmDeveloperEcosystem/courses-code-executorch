@@ -258,6 +258,8 @@ Java package. Start with `ExecuTorchSegmenter.java` for the runtime API.
 - `module-4-ethos-npu-accelerated-inference/scripts/fvp/create_mobilenetv2_input.py`
 - `module-4-ethos-npu-accelerated-inference/scripts/fvp/decode_mobilenetv2_output.py`
 - `module-4-ethos-npu-accelerated-inference/apps/fvp_image_classifier/arm_executor_runner_topk.patch`
+- `module-4-ethos-npu-accelerated-inference/apps/ethosu_cpp_reference/model_runner.cpp`
+- `module-4-ethos-npu-accelerated-inference/apps/ethosu_cpp_reference/classification_postprocess.cpp`
 
 When the ExecuTorch source checkout is available, inspect the upstream Arm
 executor runner to see the complete C++ runtime load and execute path.

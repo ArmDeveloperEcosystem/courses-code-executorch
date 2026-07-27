@@ -23,12 +23,14 @@ COURSE_PATH_PREFIXES = tuple(
 ) + (".agents/",)
 MARKDOWN_FILES = [
     ROOT / "README.md",
+    ROOT / "CONTRIBUTING.md",
     ROOT / "AGENTS.md",
     ROOT / ".agents/course-context.md",
     ROOT / ".agents/skills/explain-mode/SKILL.md",
     ROOT / ".agents/skills/build-mode/SKILL.md",
     *(directory / f"module_{module}.md" for module, directory in COURSE_MODULES.items()),
     COURSE_MODULES[2] / "module_2_ext/module_2_ext.md",
+    COURSE_MODULES[4] / "apps/ethosu_cpp_reference/README.md",
 ]
 LINK_PATTERN = re.compile(r"!?\[[^\]]*\]\(([^)]+)\)")
 CONTEXT_PATH_PATTERN = re.compile(r"^- `([^`]+)`$")
@@ -64,6 +66,14 @@ def check_python(errors: list[str]) -> int:
             files.extend(
                 path
                 for path in sorted(scripts.rglob("*.py"))
+                if "__pycache__" not in path.parts
+            )
+    for module in range(1, 5):
+        apps = COURSE_MODULES[module] / "apps"
+        if apps.exists():
+            files.extend(
+                path
+                for path in sorted(apps.rglob("*.py"))
                 if "__pycache__" not in path.parts
             )
 

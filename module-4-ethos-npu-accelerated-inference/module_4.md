@@ -1486,6 +1486,56 @@ The generic runner and classification app use the same `.pte` artifact and
 input tensor. The application adds model-specific postprocessing and label
 lookup around the ExecuTorch call.
 
+## Optional: Build on the C++ Reference Application
+
+The classification patch shows the small change needed to add MobileNetV2
+postprocessing to the upstream runner. For a new application, it is often
+easier to start from source files that separate the ExecuTorch runtime calls
+from the model-specific output handling.
+
+The [Ethos-U C++ reference application](apps/ethosu_cpp_reference/README.md)
+provides that structure:
+
+| File | Responsibility |
+|---|---|
+| `app_main.cpp` | Initialize ExecuTorch and connect model outputs to the application |
+| `model_runner.cpp` | Load the `.pte`, allocate method memory, set the input, execute the method, and retrieve outputs |
+| `classification_postprocess.cpp` | Convert the MobileNetV2 output tensor into top-five labels and logits |
+| `app_config.h` | Define the input count, output index, top-k value, and allocator sizes |
+| `CMakeLists.txt` | Link the application with ExecuTorch, the Ethos-U delegate, Arm kernels, and Corstone-320 startup code |
+
+The runtime path is visible in `model_runner.cpp`:
+
+```cpp
+Result<Program> program = Program::load(&loader);
+Result<MethodMeta> method_meta = program->method_meta(*method_name);
+
+MemoryManager memory_manager(
+    &method_allocator, &planned_memory, &temporary_allocator);
+Result<Method> method =
+    program->load_method(*method_name, &memory_manager);
+
+method->set_input(input_tensor, 0);
+method->execute();
+method->get_outputs(outputs.data(), outputs.size());
+```
+
+`Program::load()` reads the serialized ExecuTorch program. `method_meta()`
+provides the tensor and memory-plan information needed before the method is
+loaded. `load_method()` prepares the executable method with the supplied
+allocators. The application then sets the prepared input tensor, calls
+`execute()`, and retrieves the output values.
+
+The reference build embeds the `.pte`, `i0.bin`, and ImageNet labels in the
+application ELF instead of reading them through semihosting. This makes the
+application structure closer to one that could be moved to a physical board.
+Follow the build and FVP commands in its README after completing Tasks 1–5.
+
+To adapt it, keep `model_runner.cpp` and replace the input preparation,
+`classification_postprocess.cpp`, and `handle_output()` with code for the new
+model and application. Update the visible allocator sizes after checking the
+new model's memory plan and the target memory map.
+
 ## Optional: Run the Upstream One-Command Flow
 
 ExecuTorch also provides `examples/arm/run.sh`, which combines model export,
