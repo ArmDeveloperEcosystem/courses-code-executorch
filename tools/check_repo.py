@@ -18,7 +18,6 @@ MARKDOWN_FILES = [
     ROOT / ".agents/skills/explain-mode/SKILL.md",
     ROOT / ".agents/skills/build-mode/SKILL.md",
     *(ROOT / f"module_{module}/module_{module}.md" for module in COURSE_MODULES),
-    ROOT / "module_4/apps/fvp_image_classifier/README.md",
 ]
 LINK_PATTERN = re.compile(r"!?\[[^\]]*\]\(([^)]+)\)")
 CONTEXT_PATH_PATTERN = re.compile(r"^- `((?:module_[0-4]|\.agents)/[^`]+)`$")
