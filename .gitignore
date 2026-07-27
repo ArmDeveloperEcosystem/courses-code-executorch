@@ -20,11 +20,14 @@ __pycache__/
 *.remote-main.md
 
 # Course benchmark outputs
-module_*/results/*
-!module_*/results/.gitkeep
+module_*/**/results/*
+module-*/**/results/*
+!module_*/**/results/.gitkeep
+!module-*/**/results/.gitkeep
 
 # Generated model data, downloads, datasets, exports, and lowering artifacts
-module_*/artifacts/
+module_*/**/artifacts/
+module-*/**/artifacts/
 
 # Android local build outputs
 module_*/android/**/.gradle/
@@ -32,13 +35,22 @@ module_*/android/**/.cxx/
 module_*/android/**/build/
 module_*/android/**/local.properties
 module_*/android/**/captures/
+module-*/android/**/.gradle/
+module-*/android/**/.cxx/
+module-*/android/**/build/
+module-*/android/**/local.properties
+module-*/android/**/captures/
 
 # Android assets copied from generated module artifacts
 module_*/android/**/src/main/assets/**/*.pte
 module_*/android/**/src/main/assets/**/*.pt
 module_*/android/**/src/main/assets/**/*.pt2
 module_*/android/**/src/main/assets/**/*.pth
+module-*/android/**/src/main/assets/**/*.pte
+module-*/android/**/src/main/assets/**/*.pt
+module-*/android/**/src/main/assets/**/*.pt2
+module-*/android/**/src/main/assets/**/*.pth
 
 # Module 3 synchronizes generated model data into the Android project
-module_3/android/**/src/main/assets/model_spec.json
-module_3/android/**/src/main/assets/voc_labels.json
+module-3-executorch-on-android-semantic-segmentation/android/**/src/main/assets/model_spec.json
+module-3-executorch-on-android-semantic-segmentation/android/**/src/main/assets/voc_labels.json

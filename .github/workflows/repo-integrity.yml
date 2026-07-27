@@ -24,4 +24,4 @@ jobs:
           python-version: "3.11"
 
       - name: Check repository
-        run: python tools/check_repo.py
+        run: python course_support/check_repo.py

@@ -208,38 +208,43 @@ search rather than assuming the list is exhaustive.
 
 ### Module 1
 
-- `module_1/scripts/aot/prepare_opt125m.py`
-- `module_1/scripts/aot/prepare_distilbert_fillmask.py`
-- `module_1/scripts/aot/lower_to_executorch.py`
-- `module_1/scripts/pi/benchmark_model.py`
-- `module_1/scripts/pi/core/opt_chat_core.py`
-- `module_1/scripts/pi/core/distilbert_autocomplete_core.py`
-- `module_1/scripts/_support/common.py`
+- `module-1-transformer-inference-with-xnnpack/scripts/aot/prepare_opt125m.py`
+- `module-1-transformer-inference-with-xnnpack/scripts/aot/prepare_distilbert_fillmask.py`
+- `module-1-transformer-inference-with-xnnpack/scripts/aot/lower_to_executorch.py`
+- `module-1-transformer-inference-with-xnnpack/scripts/pi/benchmark_model.py`
+- `module-1-transformer-inference-with-xnnpack/scripts/pi/core/opt_chat_core.py`
+- `module-1-transformer-inference-with-xnnpack/scripts/pi/core/distilbert_autocomplete_core.py`
+- `module-1-transformer-inference-with-xnnpack/scripts/_support/common.py`
 
 The web-serving files are secondary unless the user asks about application or
 HTTP integration.
 
 ### Module 2
 
-- `module_2/scripts/aot/prepare_mobilenetv2.py`
-- `module_2/scripts/aot/lower_mobilenetv2_xnnpack.py`
-- `module_2/scripts/aot/quantize_mobilenetv2_xnnpack.py`
-- `module_2/scripts/pi/benchmark_mobilenetv2.py`
-- `module_2/scripts/pi/core/mobilenetv2_core.py`
-- `module_2/scripts/_support/common.py`
+- `module-2-cnn-inference-with-quantization/scripts/aot/prepare_mobilenetv2.py`
+- `module-2-cnn-inference-with-quantization/scripts/aot/lower_mobilenetv2_xnnpack.py`
+- `module-2-cnn-inference-with-quantization/scripts/aot/quantize_mobilenetv2_xnnpack.py`
+- `module-2-cnn-inference-with-quantization/scripts/pi/benchmark_mobilenetv2.py`
+- `module-2-cnn-inference-with-quantization/scripts/pi/core/mobilenetv2_core.py`
+- `module-2-cnn-inference-with-quantization/scripts/_support/common.py`
+
+The optional object-detection extension is under
+`module-2-cnn-inference-with-quantization/module_2_ext/`. Its main entry points
+are `scripts/pi/download_yolov8s_ai_portal_model.py` and
+`scripts/pi/serve_yolov8s_webcam.py` within that directory.
 
 `create_calibration_images.py` explains how calibration inputs are produced,
 but its image-generation code is not the main ExecuTorch API path.
 
 ### Module 3
 
-- `module_3/scripts/aot/prepare_lraspp_mobilenetv3.py`
-- `module_3/scripts/aot/lower_lraspp_xnnpack.py`
-- `module_3/scripts/aot/quantize_lraspp_xnnpack.py`
-- `module_3/scripts/aot/validate_cutout.py`
-- `module_3/scripts/aot/segmentation_preprocessing.py`
-- `module_3/scripts/android/sync_android_assets.py`
-- `module_3/android/ObjectCutout/app/src/main/java/org/arm/education/executorch/objectcutout/ExecuTorchSegmenter.java`
+- `module-3-executorch-on-android-semantic-segmentation/scripts/aot/prepare_lraspp_mobilenetv3.py`
+- `module-3-executorch-on-android-semantic-segmentation/scripts/aot/lower_lraspp_xnnpack.py`
+- `module-3-executorch-on-android-semantic-segmentation/scripts/aot/quantize_lraspp_xnnpack.py`
+- `module-3-executorch-on-android-semantic-segmentation/scripts/aot/validate_cutout.py`
+- `module-3-executorch-on-android-semantic-segmentation/scripts/aot/segmentation_preprocessing.py`
+- `module-3-executorch-on-android-semantic-segmentation/scripts/android/sync_android_assets.py`
+- `module-3-executorch-on-android-semantic-segmentation/android/ObjectCutout/app/src/main/java/org/arm/education/executorch/objectcutout/ExecuTorchSegmenter.java`
 
 For the application contract and lifecycle, also inspect `ImagePreprocessor.java`,
 `MaskPostprocessor.java`, `ModelSpec.java`, and `MainActivity.java` in the same
@@ -247,12 +252,12 @@ Java package. Start with `ExecuTorchSegmenter.java` for the runtime API.
 
 ### Module 4
 
-- `module_4/scripts/aot/lower_fp32_ethosu.py`
-- `module_4/scripts/aot/quantize_lower_ethosu.py`
-- `module_4/scripts/aot/dump_tosa_artifacts.py`
-- `module_4/scripts/fvp/create_mobilenetv2_input.py`
-- `module_4/scripts/fvp/decode_mobilenetv2_output.py`
-- `module_4/apps/fvp_image_classifier/arm_executor_runner_topk.patch`
+- `module-4-ethos-npu-accelerated-inference/scripts/aot/lower_fp32_ethosu.py`
+- `module-4-ethos-npu-accelerated-inference/scripts/aot/quantize_lower_ethosu.py`
+- `module-4-ethos-npu-accelerated-inference/scripts/aot/dump_tosa_artifacts.py`
+- `module-4-ethos-npu-accelerated-inference/scripts/fvp/create_mobilenetv2_input.py`
+- `module-4-ethos-npu-accelerated-inference/scripts/fvp/decode_mobilenetv2_output.py`
+- `module-4-ethos-npu-accelerated-inference/apps/fvp_image_classifier/arm_executor_runner_topk.patch`
 
 When the ExecuTorch source checkout is available, inspect the upstream Arm
 executor runner to see the complete C++ runtime load and execute path.

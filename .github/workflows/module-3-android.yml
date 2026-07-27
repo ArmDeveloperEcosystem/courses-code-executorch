@@ -3,13 +3,13 @@ name: Module 3 Android
 on:
   pull_request:
     paths:
-      - "module_3/android/**"
+      - "module-3-executorch-on-android-semantic-segmentation/android/**"
       - ".github/workflows/module-3-android.yml"
   push:
     branches:
       - main
     paths:
-      - "module_3/android/**"
+      - "module-3-executorch-on-android-semantic-segmentation/android/**"
       - ".github/workflows/module-3-android.yml"
 
 permissions:
@@ -22,7 +22,7 @@ jobs:
 
     defaults:
       run:
-        working-directory: module_3/android/ObjectCutout
+        working-directory: module-3-executorch-on-android-semantic-segmentation/android/ObjectCutout
 
     steps:
       - name: Check out repository
