@@ -11,6 +11,14 @@ You will start with CPU inference on Raspberry Pi using XNNPACK, covering exampl
 
 This course is best used in parallel with the ExecuTorch Documentation.
 
+## Course content 
+
+This repository contains the necessary scripts and information to accompany the course. 
+
+The learner-facing Modules 1–4 are published separately at .
+This repository contains the supporting scripts, applications, images, and
+configuration used by those modules.
+
 ## Course Overview
 
 **Skill level:** Introductory
