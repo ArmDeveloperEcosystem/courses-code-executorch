@@ -24,7 +24,7 @@ integration.
 
 ## Inspect the implementation
 
-Read the relevant module markdown once published and the code it invokes. For a complete task,
+Read the relevant module published content and the code it invokes. For a complete task,
 inspect the major files in its execution path:
 
 - model preparation and input-contract code
