@@ -279,6 +279,7 @@ explain the task
 
 Use these rules when explaining or extending the material:
 
+- The published course content defines the learner-facing task order. The module directories in this repository contain the supporting scripts, applications, images, and configuration files.
 - Later modules assume concepts introduced in earlier modules. Do not repeat a
   full introductory explanation unless the learner needs it.
 - Code snippets select the relevant part of a larger script. Open the script
