@@ -12,7 +12,8 @@ python ~/executorch_on_arm/module-4-ethos-npu-accelerated-inference/apps/fvp_ima
   --out ~/executorch/examples/arm/executor_runner/imagenet_labels.h
 ```
 
-Apply it from the ExecuTorch repository root 
+Apply it from the ExecuTorch repository root as described in
+`module-4-ethos-npu-accelerated-inference/module_4.md`:
 
 ```bash
 cd ~/executorch
