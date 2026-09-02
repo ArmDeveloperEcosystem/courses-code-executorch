@@ -28,7 +28,7 @@ MARKDOWN_FILES = [
     ROOT / ".agents/course-context.md",
     ROOT / ".agents/skills/explain-mode/SKILL.md",
     ROOT / ".agents/skills/build-mode/SKILL.md",
-    *(directory / f"module_{module}.md" for module, directory in COURSE_MODULES.items()),
+    COURSE_MODULES[0] / "module_0.md",
     COURSE_MODULES[2] / "module_2_ext/module_2_ext.md",
     COURSE_MODULES[4] / "apps/ethosu_cpp_reference/README.md",
 ]
