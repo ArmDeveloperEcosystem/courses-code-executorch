@@ -132,7 +132,6 @@ portable Python bindings used by the course.
 
 ## Repository conventions
 
-- `module_N/module_N.md` defines the learner-facing task order.
 - `scripts/aot/` contains development-machine preparation, export,
   quantization, lowering, validation, and artifact creation.
 - `scripts/pi/` contains Raspberry Pi runtime, benchmark, and Python
