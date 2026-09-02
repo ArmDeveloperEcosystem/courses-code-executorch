@@ -55,7 +55,7 @@ ahead-of-time preparation scripts and either read the content without running th
 Introduces ExecuTorch, the ahead-of-time deployment workflow, the course
 hardware targets, and the optional AI-agent learning modes.
 
-### [Module 1: Get started with ExecuTorch and Understand Delegation - Transformer Inference on Arm Cortex-A CPU](module-1-transformer-inference-with-xnnpack/module_1.md)
+### Module 1: Get started with ExecuTorch and Understand Delegation - Transformer Inference on Arm Cortex-A CPU
 
 In this Module, we introduce ExecuTorch, explaining its role in the PyTorch Ecosystem, and in Edge AI. You will install ExecuTorch to your development machine in a Python environment. In an `ahead-of-time` flow, you will obtain two different Transformer-based PyTorch models from Hugging Face (OPT-125M, and DistilBERT), and perform export and lowering to convert them to an ExecuTorch format. You will use both the ExecuTorch Portable Kernel Library, and also optimized delegation to XNNPACK.
 
@@ -69,7 +69,7 @@ Finally, you will run example applications for each - a simple Chatbot, and a si
 
 By the end, you will have completed a typical `ahead-of-time` preparation flow, and deployed your prepared models in applications on target hardware. You will be able to discuss when and why to delegate to optimized backends like XNNPACK, and how you can use tools like Model Explorer to visualize graph changes after delegation has occurred. You will be ready to move onto Module 2, where you will cover image classification, and will also explore Quantization in ExecuTorch.
 
-### [Module 2: CNN Inference on Arm Cortex-A CPU and Optimize with INT8 Quantization](module-2-cnn-inference-with-quantization/module_2.md)
+### Module 2: CNN Inference on Arm Cortex-A CPU and Optimize with INT8 Quantization
 
 In this Module, you move from transformer inference to image classification.
 You will prepare a pretrained MobileNetV2 model from TorchVision, and export the model to an ExecuTorch `.pte` artifact with XNNPACK delegation. You will benchmark two runtime paths on the Raspberry Pi: PyTorch eager and
@@ -90,7 +90,7 @@ differently to XNNPACK when compared with transformer-based models, and you
 will be able to compare PyTorch eager, FP32 ExecuTorch with XNNPACK, and INT8
 ExecuTorch with XNNPACK on the same target device.
 
-### [Module 3: ExecuTorch on Mobile - Using the XNNPACK Backend on Android for Semantic Segmentation](module-3-executorch-on-android-semantic-segmentation/module_3.md)
+### Module 3: ExecuTorch on Mobile - Using the XNNPACK Backend on Android for Semantic Segmentation
 
 In this module, you move from Edge Linux deployment on a Raspberry Pi to an
 Android application. You will prepare an LR-ASPP MobileNetV3 semantic
@@ -118,7 +118,7 @@ and native runtime cleanup. You will also understand where XNNPACK CPU
 execution fits alongside other mobile options such as iOS, device NPUs, SME2,
 and the Arm VGF backend for neural graphics workloads.
 
-### [Module 4: Deploy ExecuTorch Models with Arm Ethos-U Acceleration](module-4-ethos-npu-accelerated-inference/module_4.md)
+### Module 4: Deploy ExecuTorch Models with Arm Ethos-U Acceleration
 
 In this module, you return to the MobileNetV2 model, and explore how to optimize and accelerate its deployment via use of an Ethos-U NPU. You will explore FP32 and INT8 Post-Training Quantization routes, and understand how the Ethos-U backend differs from the XNNPACK backend. You will become familiar with the Vela compiler and the TOSA intermediate representation.
 
