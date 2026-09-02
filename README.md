@@ -3,8 +3,8 @@
 [![Repository integrity](https://github.com/arm-education/executorch_on_arm_v2/actions/workflows/repo-integrity.yml/badge.svg?branch=main)](https://github.com/arm-education/executorch_on_arm_v2/actions/workflows/repo-integrity.yml)
 [![Module 3 Android](https://github.com/arm-education/executorch_on_arm_v2/actions/workflows/module-3-android.yml/badge.svg?branch=main)](https://github.com/arm-education/executorch_on_arm_v2/actions/workflows/module-3-android.yml)
 
-A hands-on course for deploying PyTorch models to Arm CPUs and NPUs with
-ExecuTorch. The course walks through ahead-of-time model preparation,
+This repository accompanies the hands-on course for deploying PyTorch models to Arm CPUs and NPUs with
+ExecuTorch available at [URL TO FOLLOW]. The course walks through ahead-of-time model preparation,
 backend delegation and graph inspection, post-training quantization, and runtime benchmarking and example applications across a range of hardware targets.
 
 You will start with CPU inference on Raspberry Pi using XNNPACK, covering examples including both transformer and CNN-based models. You will then explore Mobile deployment, and understand what changes when moving from Cortex-A on Edge Linux, to a Mobile OS like Android. Finally, you will get hands-on with Cortex-M Microcontroller + Ethos-U NPU acceleration. Each Module should extend your knowledge, and provide practical examples that allow you to quickly begin trying the workflow. Each Module links to supplementary resources that act as useful next steps, either to reinforce what you have done, or to extend to more advanced topics.
