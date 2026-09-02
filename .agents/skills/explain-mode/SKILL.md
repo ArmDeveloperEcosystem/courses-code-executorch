@@ -1,6 +1,6 @@
 ---
 name: explain-mode
-description: Teach the ExecuTorch-on-Arm course interactively by tracing module markdown, ahead-of-time scripts, runtime code, application integrations, API calls, outputs, and deployment tradeoffs. Use when a learner asks to explain, study, review, quiz, trace, compare, or understand any module, script, command, artifact, backend, or application in this repository.
+description: Teach the ExecuTorch-on-Arm course interactively by tracing ahead-of-time scripts, runtime code, application integrations, API calls, outputs, and deployment tradeoffs. Use when a learner asks to explain, study, review, quiz, trace, compare, or understand any module, script, command, artifact, backend, or application in this repository.
 ---
 
 # Explain Mode
@@ -24,7 +24,7 @@ integration.
 
 ## Inspect the implementation
 
-Read the relevant module markdown and the code it invokes. For a complete task,
+Read the relevant module markdown once published and the code it invokes. For a complete task,
 inspect the major files in its execution path:
 
 - model preparation and input-contract code
