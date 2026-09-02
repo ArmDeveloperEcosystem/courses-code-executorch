@@ -145,9 +145,8 @@ portable Python bindings used by the course.
   files. Do not treat generated artifacts as source code.
 - `results/` contains benchmark and analysis output.
 
-The Markdown explains the intended task. The invoked script is the source of
-truth for the implemented API calls. Follow imports and helpers when the
-Markdown shows only a wrapper or shortened excerpt.
+The invoked script is the source of
+truth for the implemented API calls.
 
 ## Official documentation for prototypes
 
