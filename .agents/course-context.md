@@ -132,7 +132,6 @@ portable Python bindings used by the course.
 
 ## Repository conventions
 
-- `module_N/module_N.md` defines the learner-facing task order.
 - `scripts/aot/` contains development-machine preparation, export,
   quantization, lowering, validation, and artifact creation.
 - `scripts/pi/` contains Raspberry Pi runtime, benchmark, and Python
@@ -146,9 +145,8 @@ portable Python bindings used by the course.
   files. Do not treat generated artifacts as source code.
 - `results/` contains benchmark and analysis output.
 
-The Markdown explains the intended task. The invoked script is the source of
-truth for the implemented API calls. Follow imports and helpers when the
-Markdown shows only a wrapper or shortened excerpt.
+The invoked script is the source of
+truth for the implemented API calls.
 
 ## Official documentation for prototypes
 
@@ -280,6 +278,7 @@ explain the task
 
 Use these rules when explaining or extending the material:
 
+- The published course content defines the learner-facing task order. The module directories in this repository contain the supporting scripts, applications, images, and configuration files.
 - Later modules assume concepts introduced in earlier modules. Do not repeat a
   full introductory explanation unless the learner needs it.
 - Code snippets select the relevant part of a larger script. Open the script

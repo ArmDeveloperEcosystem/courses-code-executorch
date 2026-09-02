@@ -14,7 +14,7 @@ read and follow:
 
 `.agents/skills/explain-mode/SKILL.md`
 
-Keep the interaction conversational. Inspect the module markdown and the real
+Keep the interaction conversational. Inspect the published course content and corresponding repository
 scripts or application code, explain the ExecuTorch APIs, and ask focused
 questions that let the learner check and deepen their understanding.
 
