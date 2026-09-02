@@ -50,7 +50,7 @@ ahead-of-time preparation scripts and either read the content without running th
 
 ## Course Modules
 
-### [Module 0: Course and ExecuTorch Overview](module-0-course-executorch-intro/module_0.md)
+### Module 0: Course and ExecuTorch Overview
 
 Introduces ExecuTorch, the ahead-of-time deployment workflow, the course
 hardware targets, and the optional AI-agent learning modes.
