@@ -32,8 +32,6 @@ Vela, Corstone-320, Transformers, LLMs, CNNs
 
 **License:** [3-Clause BSD Licence](https://opensource.org/license/bsd-3-clause)
 
-**Contributing:** [Corrections, new modules, and demo applications are welcome](CONTRIBUTING.md)
-
 ## Who This Is For
 
 This course is for developers who want to learn how to deploy PyTorch
