@@ -30,7 +30,7 @@ configuration used by those modules.
 **Main technologies:** PyTorch, ExecuTorch, XNNPACK, KleidiAI, Model Explorer, Cortex-A, Cortex-M, Ethos-U, TOSA,
 Vela, Corstone-320, Transformers, LLMs, CNNs
 
-**License:** [Creative Commons Attribution-ShareAlike 4.0](LICENSE)
+**License:** [3-Clause BSD Licence](https://opensource.org/license/bsd-3-clause)
 
 **Contributing:** [Corrections, new modules, and demo applications are welcome](CONTRIBUTING.md)
 
