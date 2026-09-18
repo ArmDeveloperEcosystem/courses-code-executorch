@@ -9,6 +9,7 @@ from typing import Any
 
 
 DEFAULT_REPO_ID = "Arm/yolov8s-int8-xnnpack-executorch"
+DEFAULT_REVISION = "1a77e7aa86df18d1db1e0c74e40000c665fbd5d9"
 COCO_LABELS = [
     "person",
     "bicycle",
@@ -98,23 +99,37 @@ def main() -> None:
         description="Download the AI Portal YOLOv8s INT8 ExecuTorch with XNNPACK model package."
     )
     parser.add_argument("--repo-id", default=DEFAULT_REPO_ID)
-    parser.add_argument("--out", type=Path, default=Path("module-2-cnn-inference-with-quantization/module_2_ext/artifacts/yolov8s_int8_xnnpack"))
-    parser.add_argument("--revision", default=None)
+    parser.add_argument(
+        "--out",
+        type=Path,
+        default=Path(
+            "module-2-cnn-inference-with-quantization/artifacts/yolov8s_int8_xnnpack"
+        ),
+    )
+    parser.add_argument(
+        "--revision",
+        default=None,
+        help="Model repository revision. The default AI Portal model uses the course-pinned revision.",
+    )
     args = parser.parse_args()
 
     from huggingface_hub import snapshot_download
+
+    revision = args.revision
+    if revision is None and args.repo_id == DEFAULT_REPO_ID:
+        revision = DEFAULT_REVISION
 
     args.out.mkdir(parents=True, exist_ok=True)
     snapshot_path = Path(
         snapshot_download(
             repo_id=args.repo_id,
-            revision=args.revision,
-            allow_patterns=["*.pte", "*.json", "*.txt", "*.md"],
+            revision=revision,
+            allow_patterns=["*.pte", "*.json", "*.txt", "*.md", "*.yaml", "*.yml"],
         )
     )
 
     copied = copy_model_files(snapshot_path, args.out)
-    generated = ensure_app_contract(args.out, args.repo_id)
+    generated = ensure_app_contract(args.out, args.repo_id, snapshot_path.name)
 
     print(f"Downloaded {args.repo_id}")
     for path in [*copied, *generated]:
@@ -128,7 +143,7 @@ def copy_model_files(source: Path, out: Path) -> list[Path]:
     for path in source.rglob("*"):
         if not path.is_file():
             continue
-        if path.suffix.lower() not in {".pte", ".json", ".txt", ".md"}:
+        if path.suffix.lower() not in {".pte", ".json", ".txt", ".md", ".yaml", ".yml"}:
             continue
         destination = out / path.name
         if destination in destinations:
@@ -141,7 +156,7 @@ def copy_model_files(source: Path, out: Path) -> list[Path]:
     return copied
 
 
-def ensure_app_contract(out: Path, repo_id: str) -> list[Path]:
+def ensure_app_contract(out: Path, repo_id: str, revision: str) -> list[Path]:
     written: list[Path] = []
 
     labels_path = out / "coco_labels.json"
@@ -153,12 +168,12 @@ def ensure_app_contract(out: Path, repo_id: str) -> list[Path]:
     spec_path = out / "model_spec.json"
     if spec_path.exists():
         spec = json.loads(spec_path.read_text())
-        changed = normalize_spec(spec, repo_id, pte_name)
+        changed = normalize_spec(spec, repo_id, revision, pte_name)
         if changed:
             spec_path.write_text(json.dumps(spec, indent=2) + "\n")
             written.append(spec_path)
     else:
-        write_default_spec(spec_path, repo_id, pte_name)
+        write_default_spec(spec_path, repo_id, revision, pte_name)
         written.append(spec_path)
 
     return written
@@ -169,12 +184,17 @@ def select_pte(out: Path) -> Path:
     if not pte_files:
         raise FileNotFoundError(f"No .pte artifact found in {out}")
     for path in pte_files:
+        if "optimized" in path.name.lower():
+            return path
+    for path in pte_files:
         if "int8" in path.name.lower():
             return path
     return pte_files[0]
 
 
-def normalize_spec(spec: dict[str, Any], repo_id: str, pte_name: str) -> bool:
+def normalize_spec(
+    spec: dict[str, Any], repo_id: str, revision: str, pte_name: str
+) -> bool:
     before = json.dumps(spec, sort_keys=True)
     spec.setdefault("adapter", "yolov8_detection")
     spec.setdefault("name", "yolov8s_int8_xnnpack")
@@ -184,15 +204,18 @@ def normalize_spec(spec: dict[str, Any], repo_id: str, pte_name: str) -> bool:
     spec.setdefault("runtime", "executorch")
     spec.setdefault("backend", "xnnpack")
     spec.setdefault("precision", "int8")
+    spec.setdefault("optimizations", ["xnnpack", "kleidiai"])
+    spec.setdefault("license", "AGPL-3.0")
     spec["pte"] = pte_name
     spec["labels"] = "coco_labels.json"
-    spec.setdefault(
-        "source",
+    source = spec.setdefault("source", {})
+    source.update(
         {
             "ai_portal": "Arm AI Portal model garden",
             "huggingface_repo": repo_id,
             "huggingface_url": f"https://huggingface.co/{repo_id}",
-        },
+            "revision": revision,
+        }
     )
     spec.setdefault(
         "inputs",
@@ -212,7 +235,7 @@ def normalize_spec(spec: dict[str, Any], repo_id: str, pte_name: str) -> bool:
         [
             {
                 "name": "predictions",
-                "shape": [1, 84, 8400],
+                "shape": [1, 84, "N"],
                 "dtype": "float32",
                 "description": "YOLOv8 box and class predictions.",
             }
@@ -231,14 +254,17 @@ def normalize_spec(spec: dict[str, Any], repo_id: str, pte_name: str) -> bool:
         {
             "box_format": "xywh",
             "confidence_threshold": 0.25,
-            "iou_threshold": 0.45,
+            "iou_threshold": 0.7,
             "max_detections": 50,
         },
     )
+    spec["postprocessing"]["iou_threshold"] = 0.7
     return before != json.dumps(spec, sort_keys=True)
 
 
-def write_default_spec(path: Path, repo_id: str, pte_name: str) -> None:
+def write_default_spec(
+    path: Path, repo_id: str, revision: str, pte_name: str
+) -> None:
     spec: dict[str, Any] = {
         "adapter": "yolov8_detection",
         "name": "yolov8s_int8_xnnpack",
@@ -248,11 +274,14 @@ def write_default_spec(path: Path, repo_id: str, pte_name: str) -> None:
         "runtime": "executorch",
         "backend": "xnnpack",
         "precision": "int8",
+        "optimizations": ["xnnpack", "kleidiai"],
+        "license": "AGPL-3.0",
         "pte": pte_name,
         "source": {
             "ai_portal": "Arm AI Portal model garden",
             "huggingface_repo": repo_id,
             "huggingface_url": f"https://huggingface.co/{repo_id}",
+            "revision": revision,
         },
         "inputs": [
             {
@@ -267,7 +296,7 @@ def write_default_spec(path: Path, repo_id: str, pte_name: str) -> None:
         "outputs": [
             {
                 "name": "predictions",
-                "shape": [1, 84, 8400],
+                "shape": [1, 84, "N"],
                 "dtype": "float32",
                 "description": "YOLOv8 box and class predictions.",
             }
@@ -281,7 +310,7 @@ def write_default_spec(path: Path, repo_id: str, pte_name: str) -> None:
         "postprocessing": {
             "box_format": "xywh",
             "confidence_threshold": 0.25,
-            "iou_threshold": 0.45,
+            "iou_threshold": 0.7,
             "max_detections": 50,
         },
     }

@@ -1,6 +1,7 @@
-# Module 4 add-on requirements for the ExecuTorch source virtual environment.
-# Activate ~/executorch/.venv first, then install this file from the course repo.
-# TorchVision must match the PyTorch wheel installed by ExecuTorch.
+# Module 4 uses the ExecuTorch source virtual environment because the Arm
+# backend is loaded from that checkout. That environment supplies torch,
+# torchao, and executorch; this file supplies the remaining Python packages.
+# Activate ~/executorch/.venv first. TorchVision must match its PyTorch wheel.
 --extra-index-url https://download.pytorch.org/whl/test/cpu
 torchvision==0.28.0+cpu
 pillow

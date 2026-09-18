@@ -9,9 +9,9 @@ import sys
 import threading
 
 
-MODULE2_EXT_SCRIPTS = Path(__file__).resolve().parents[1]
-if str(MODULE2_EXT_SCRIPTS) not in sys.path:
-    sys.path.insert(0, str(MODULE2_EXT_SCRIPTS))
+MODULE2_SCRIPTS = Path(__file__).resolve().parents[1]
+if str(MODULE2_SCRIPTS) not in sys.path:
+    sys.path.insert(0, str(MODULE2_SCRIPTS))
 
 from _support.web.yolov8s_webcam_page import render_page
 from core.yolov8s_core import YoloV8Runner, configure_quiet_output
@@ -19,7 +19,13 @@ from core.yolov8s_core import YoloV8Runner, configure_quiet_output
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Serve a YOLOv8s INT8 ExecuTorch with XNNPACK webcam demo.")
-    parser.add_argument("--spec", type=Path, default=Path("module-2-cnn-inference-with-quantization/module_2_ext/artifacts/yolov8s_int8_xnnpack/model_spec.json"))
+    parser.add_argument(
+        "--spec",
+        type=Path,
+        default=Path(
+            "module-2-cnn-inference-with-quantization/artifacts/yolov8s_int8_xnnpack/model_spec.json"
+        ),
+    )
     parser.add_argument("--camera", default="0", help="OpenCV camera index or video path.")
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8094)

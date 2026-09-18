@@ -1,10 +1,6 @@
-# Optional Next Step: Deploy a Pre-Optimized YOLOv8s Object Detector from Arm AI Portal
-### When should I use a pre-optimized AI Portal model instead of exporting and quantizing a model myself?
+# Deploy a Pre-Optimized YOLOv8s Object Detector from Arm AI Portal
 
 [Module 2: YOLOv8s Object Detection with an AI Portal Model]
-> Draft status: keep this section unpublished until the AI Portal model page
-> and download path are public. When released, integrate it into Module 2. The
-> current workflow assumes access to `Arm/yolov8s-int8-xnnpack-executorch`.
 
 ## About this extension
 
@@ -15,10 +11,7 @@ classification output on the target.
 
 In this section, you will use a pre-optimized YOLOv8s object detection model
 packaged for ExecuTorch with XNNPACK. Instead of exporting and quantizing the
-model yourself, you will download the prepared `.pte` artifact and focus on
-application integration.
-
-Instead of exporting and quantizing locally, you download a prepared YOLOv8s INT8 ExecuTorch with XNNPACK package, run it on the Raspberry Pi, and focus on application integration: camera input, letterbox pre-processing, detector post-processing, box drawing, and latency checks.
+model yourself, you will download the prepared `.pte` artifact, run it on the Raspberry Pi, and focus on application integration: camera input, letterbox pre-processing, detector post-processing, box drawing, and latency checks.
 
 In this extension, “pre-optimized” means that the package already includes the ExecuTorch `.pte` artifact for the selected backend and precision. It does not mean the full product is ready. The application still owns camera input, pre-processing, post-processing, thresholds, drawing, user experience, and production validation.
 
@@ -30,10 +23,6 @@ For this workflow, the model is:
 - target: Raspberry Pi 5, Edge Linux, `arm64`
 - package: `Arm/yolov8s-int8-xnnpack-executorch`
 
-In this section, you skip local export and quantization. The work is to
-integrate a pre-optimized `.pte` artifact into an application and understand
-the pre-processing, post-processing, and runtime checks needed around it.
-
 | Workflow step | What changes vs stays the same in this section |
 |---|---|
 | Model preparation | Download a pre-optimized AI Portal package instead of exporting from PyTorch |
@@ -44,7 +33,7 @@ the pre-processing, post-processing, and runtime checks needed around it.
 YOLO stands for "You Only Look Once." It is a family of object detection models
 that predicts object locations and classes in one forward pass. YOLOv8s is the
 small variant of YOLOv8, so it is a practical choice when you want object
-detection on an edge CPU rather than only image classification.
+detection on an edge CPU.
 
 Earlier in this module, we used MobileNetV2 for image classification. Object
 detection is more complex because the model output is not a single class score
@@ -54,9 +43,9 @@ the output is useful.
 
 The scripts follow the same layout used earlier in this module:
 
-- `module-2-cnn-inference-with-quantization/module_2_ext/scripts/pi`: Raspberry Pi download and application entry points
-- `module-2-cnn-inference-with-quantization/module_2_ext/scripts/pi/core`: YOLOv8s runtime, pre-processing, and post-processing helpers
-- `module-2-cnn-inference-with-quantization/module_2_ext/scripts/_support/web`: web page rendering for the webcam demo
+- `module-2-cnn-inference-with-quantization/scripts/pi`: Raspberry Pi download and application entry points
+- `module-2-cnn-inference-with-quantization/scripts/pi/core`: YOLOv8s runtime, pre-processing, and post-processing helpers
+- `module-2-cnn-inference-with-quantization/scripts/_support/web`: web page rendering for the webcam demo
 
 ![AI Portal model garden with YOLOv8s INT8 ExecuTorch with XNNPACK visible.](images/ai-portal-model-garden-yolov8s.png)
 
@@ -64,7 +53,7 @@ The scripts follow the same layout used earlier in this module:
 
 By the end of this extension, you will be able to:
 
-- decide when a pre-optimized AI Portal package is a better starting point than a local export and quantization workflow
+- use the Arm AI Portal to find pre-optimized models for running on Arm-based devices
 - download and verify a YOLOv8s INT8 ExecuTorch with XNNPACK package
 - run the object detector on a Raspberry Pi
 - explain the application work around the `.pte` artifact: camera capture, letterbox pre-processing, confidence filtering, non-maximum suppression, label lookup, and box drawing
@@ -86,21 +75,24 @@ You will use a different workflow from the MobileNetV2 path:
 
 As you work, pay attention to the engineering trade-offs: model-package trust, target compatibility, latency, memory, pre-processing requirements, post-processing cost, camera behavior, and production validation still needed.
 
-## 1. Inspect the AI Portal Model Garden
+## 1. Inspect the Arm AI Portal 
 
-The AI Portal Model Garden shows YOLOv8s INT8 optimized for
-Raspberry Pi 5 with ExecuTorch and XNNPACK. It reports:
+The [Arm AI Portal](https://developer.arm.com/ai/models) shows YOLOv8s
+INT8 optimized for Raspberry Pi 5 with ExecuTorch and XNNPACK. The
+[YOLOv8s detail page](https://developer.arm.com/ai/models/hugging-face/Arm/yolov8s-int8-xnnpack-executorch/yolov8s-int8-pte?targetName=Raspberry+Pi+5)
+and [Arm model card](https://huggingface.co/Arm/yolov8s-int8-xnnpack-executorch)
+report:
 
 | Metric | AI Portal value |
 |---|---:|
-| mAP@0.50:0.95 | 42.04% |
-| mAP@0.50 | 47.06% |
-| mAP@0.75 | 37.02% |
-| Frames per second | 1.78 fps |
-| Latency | 562.754 ms |
-| Delegation | 96.27% |
-| Peak memory | 93.84 MB |
-| Model size | about 17 MB |
+| mAP@0.50:0.95 | 43.86% |
+| mAP@0.50 | 60.39% |
+| mAP@0.75 | 47.49% |
+| Frames per second | 2.19 fps |
+| Latency | 457.03 ms |
+| Delegation | 95.43% |
+| Peak memory | 90.28 MB |
+| Model size | 13.2 MB |
 
 ![AI Portal detail page for YOLOv8s INT8 ExecuTorch with XNNPACK.](images/ai-portal-yolov8s-model-detail.png)
 
@@ -134,7 +126,7 @@ Use the same Raspberry Pi environment as earlier in this module:
 ```bash
 cd ~/executorch_on_arm
 source .cpu_lab_venv/bin/activate
-python -m pip install -r module-2-cnn-inference-with-quantization/module_2_ext/requirements.txt
+python -m pip install -r module-2-cnn-inference-with-quantization/requirements.txt
 ```
 
 ## 3. Download and prepare the pre-optimized model on the Raspberry Pi
@@ -142,9 +134,10 @@ python -m pip install -r module-2-cnn-inference-with-quantization/module_2_ext/r
 Download the AI Portal model package from Hugging Face directly on the Pi:
 
 ```bash
-module-2-cnn-inference-with-quantization/module_2_ext/scripts/pi/download_yolov8s_ai_portal_model.py \
+module-2-cnn-inference-with-quantization/scripts/pi/download_yolov8s_ai_portal_model.py \
   --repo-id Arm/yolov8s-int8-xnnpack-executorch \
-  --out module-2-cnn-inference-with-quantization/module_2_ext/artifacts/yolov8s_int8_xnnpack
+  --revision 1a77e7aa86df18d1db1e0c74e40000c665fbd5d9 \
+  --out module-2-cnn-inference-with-quantization/artifacts/yolov8s_int8_xnnpack
 ```
 
 The script does three jobs. First, it downloads the model package from Hugging
@@ -154,21 +147,22 @@ Face:
 snapshot_path = Path(
     snapshot_download(
         repo_id=args.repo_id,
-        revision=args.revision,
-        allow_patterns=["*.pte", "*.json", "*.txt", "*.md"],
+        revision=revision,
+        allow_patterns=["*.pte", "*.json", "*.txt", "*.md", "*.yaml", "*.yml"],
     )
 )
 ```
 
-The `allow_patterns` list keeps the download focused on files the application
-needs: ExecuTorch `.pte` artifacts, metadata, labels, and documentation. It
-does not download training checkpoints or unrelated repository files.
+The revision pins the package used for this course. The `allow_patterns` list
+keeps the download focused on files the application needs: ExecuTorch `.pte`
+artifacts, JSON and YAML metadata, labels, and documentation. It does not
+download training checkpoints or unrelated repository files.
 
 Next, the script copies those files into the local artifact folder:
 
 ```python
 for path in source.rglob("*"):
-    if path.suffix.lower() not in {".pte", ".json", ".txt", ".md"}:
+    if path.suffix.lower() not in {".pte", ".json", ".txt", ".md", ".yaml", ".yml"}:
         continue
     shutil.copy2(path, out / path.name)
 ```
@@ -182,12 +176,14 @@ pte_name = select_pte(out).name
 spec_path = out / "model_spec.json"
 ```
 
-The AI Portal package may use its own `.pte` filename, such as
-`yolov8s-int8-executorch.pte`. The script selects the INT8 `.pte` artifact and
-records that filename in `model_spec.json`, so the server command does not need
-to hard-code it. It also writes `coco_labels.json` if the package does not
-include one. Those labels are needed to turn YOLO class IDs into names such as
-`person`, `chair`, or `laptop`.
+The package contains original and optimized `.pte` files. The script selects
+`yolov8s_raspberry_executorch_optimized.pte` and records that filename in
+`model_spec.json`, so the server command does not need to hard-code it. It also
+writes `coco_labels.json` if the package does not include one. Those labels are
+needed to turn YOLO class IDs into names such as `person`, `chair`, or `laptop`.
+
+The downloaded `config.yaml` records the package's input shape, value range,
+letterbox settings, output layout, and post-processing thresholds.
 
 The downloaded `model_spec.json` records the application contract:
 
@@ -216,6 +212,7 @@ calibration or PT2E conversion.
 Before running the app, confirm that the package contains:
 
 - an ExecuTorch `.pte` artifact
+- the upstream `config.yaml` model contract
 - `model_spec.json`
 - labels or a generated `coco_labels.json`
 - any package metadata needed to understand input shape, precision, runtime, and backend
@@ -233,8 +230,8 @@ uses OpenCV camera index `0`, which is usually the first connected camera. The
 Start the app on the Raspberry Pi:
 
 ```bash
-module-2-cnn-inference-with-quantization/module_2_ext/scripts/pi/serve_yolov8s_webcam.py \
-  --spec ~/executorch_on_arm/module-2-cnn-inference-with-quantization/module_2_ext/artifacts/yolov8s_int8_xnnpack/model_spec.json \
+module-2-cnn-inference-with-quantization/scripts/pi/serve_yolov8s_webcam.py \
+  --spec ~/executorch_on_arm/module-2-cnn-inference-with-quantization/artifacts/yolov8s_int8_xnnpack/model_spec.json \
   --camera 0 \
   --host 0.0.0.0 \
   --port 8094
@@ -305,7 +302,7 @@ detector, and turns raw detector output into boxes:
 ```python
 input_tensor, scale, pad = self._preprocess(frame_bgr)
 raw_output = self.model.forward((input_tensor,))[0]
-detections = self._postprocess(raw_output, frame_bgr.shape[:2], scale, pad, 0.25, 0.45)
+detections = self._postprocess(raw_output, frame_bgr.shape[:2], scale, pad, 0.25, 0.7)
 ```
 
 Pre-processing uses letterboxing, which resizes the image without changing
@@ -432,14 +429,3 @@ module, but starts from a pre-optimized AI Portal package. The AOT export and
 PTQ work are already done, so the main work is application integration: camera
 input, letterbox pre-processing, ExecuTorch runtime execution, detector
 post-processing, box drawing, and checking latency on the Raspberry Pi.
-
-## Draft Release Checklist
-
-Before releasing this section:
-
-- confirm that the AI Portal model page is public
-- confirm that `Arm/yolov8s-int8-xnnpack-executorch` can be downloaded
-  without private credentials
-- refresh the two screenshots if the AI Portal UI or metrics changed
-- verify that the downloaded package file names match the commands in
-  this draft

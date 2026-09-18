@@ -34,7 +34,7 @@ class YoloV8Runner:
         self.labels = json.loads((spec_path.parent / self.spec["labels"]).read_text())
         self.input_size = int(self.spec["inputs"][0]["shape"][-1])
         self.confidence_threshold = float(self.spec["postprocessing"].get("confidence_threshold", 0.25))
-        self.iou_threshold = float(self.spec["postprocessing"].get("iou_threshold", 0.45))
+        self.iou_threshold = float(self.spec["postprocessing"].get("iou_threshold", 0.7))
         self.max_detections = int(self.spec["postprocessing"].get("max_detections", 50))
 
         with suppress_stderr():

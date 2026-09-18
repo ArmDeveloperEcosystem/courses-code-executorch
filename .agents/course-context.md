@@ -226,10 +226,9 @@ HTTP integration.
 - `module-2-cnn-inference-with-quantization/scripts/pi/core/mobilenetv2_core.py`
 - `module-2-cnn-inference-with-quantization/scripts/_support/common.py`
 
-The optional object-detection extension is under
-`module-2-cnn-inference-with-quantization/module_2_ext/`. Its main entry points
-are `scripts/pi/download_yolov8s_ai_portal_model.py` and
-`scripts/pi/serve_yolov8s_webcam.py` within that directory.
+The object-detection section uses
+`module-2-cnn-inference-with-quantization/scripts/pi/download_yolov8s_ai_portal_model.py`
+and `module-2-cnn-inference-with-quantization/scripts/pi/serve_yolov8s_webcam.py`.
 
 `create_calibration_images.py` explains how calibration inputs are produced,
 but its image-generation code is not the main ExecuTorch API path.

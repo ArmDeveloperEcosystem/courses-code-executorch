@@ -29,7 +29,7 @@ MARKDOWN_FILES = [
     ROOT / ".agents/skills/explain-mode/SKILL.md",
     ROOT / ".agents/skills/build-mode/SKILL.md",
     COURSE_MODULES[0] / "module_0.md",
-    COURSE_MODULES[2] / "module_2_ext/module_2_ext.md",
+    COURSE_MODULES[2] / "module_2_ext.md",
     COURSE_MODULES[4] / "apps/ethosu_cpp_reference/README.md",
 ]
 LINK_PATTERN = re.compile(r"!?\[[^\]]*\]\(([^)]+)\)")
@@ -58,8 +58,7 @@ def relative(path: Path) -> str:
 def check_python(errors: list[str]) -> int:
     files = sorted((ROOT / "course_support").glob("*.py"))
     script_directories = [
-        *(COURSE_MODULES[module] / "scripts" for module in range(1, 5)),
-        COURSE_MODULES[2] / "module_2_ext/scripts",
+        COURSE_MODULES[module] / "scripts" for module in range(1, 5)
     ]
     for scripts in script_directories:
         if scripts.exists():
