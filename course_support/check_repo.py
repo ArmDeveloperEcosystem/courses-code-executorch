@@ -29,7 +29,6 @@ MARKDOWN_FILES = [
     ROOT / ".agents/skills/explain-mode/SKILL.md",
     ROOT / ".agents/skills/build-mode/SKILL.md",
     COURSE_MODULES[0] / "module_0.md",
-    COURSE_MODULES[2] / "module_2_ext.md",
     COURSE_MODULES[4] / "apps/ethosu_cpp_reference/README.md",
 ]
 LINK_PATTERN = re.compile(r"!?\[[^\]]*\]\(([^)]+)\)")
