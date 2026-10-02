@@ -146,12 +146,6 @@ portable Python bindings used by the course.
   files. Do not treat generated artifacts as source code.
 - `results/` contains benchmark and analysis output.
 
-When adding a third-party model, dataset, or image:
-
-- add a short learner notice before the first download or use
-- include source and licence fields in `model_spec.json` when the workflow
-  generates one
-
 The invoked script is the source of
 truth for the implemented API calls.
 
