@@ -4,8 +4,7 @@
 [![Module 3 Android](https://github.com/arm-education/executorch_on_arm_course/actions/workflows/module-3-android.yml/badge.svg?branch=main)](https://github.com/arm-education/executorch_on_arm_course/actions/workflows/module-3-android.yml)
 
 This repository accompanies the hands-on course for deploying PyTorch models to Arm CPUs and NPUs with
-ExecuTorch available at
-[learn.arm.com](https://learn.arm.com/courses/executorch-on-arm/).
+ExecuTorch available at [URL TO FOLLOW].
 The course walks through ahead-of-time model preparation,
 backend delegation and graph inspection, post-training quantization, and runtime benchmarking and example applications across a range of hardware targets.
 
@@ -17,8 +16,7 @@ This course is best used in parallel with the ExecuTorch Documentation.
 
 This repository contains the necessary scripts and information to accompany the course.
 
-The learner-facing Modules 1–4 are published separately at
-[learn.arm.com](https://learn.arm.com/courses/executorch-on-arm/).
+The learner-facing Modules 1–4 are published separately at [URL TO FOLLOW].
 This repository contains the supporting scripts, applications, images, and
 configuration used by those modules.
 
