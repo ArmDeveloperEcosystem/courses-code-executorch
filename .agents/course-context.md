@@ -12,11 +12,12 @@ Treat Modules 0-4 as the course:
 - Module 1 covers transformer export, portable execution, XNNPACK delegation,
   Python runtime use, and Edge Linux applications.
 - Module 2 covers CNN classification, XNNPACK, post-training quantization,
-  benchmarking, and a Python application.
+  benchmarking, ETRecord and ETDump inspection, Model Explorer profiling
+  overlays, and a Python application.
 - Module 3 moves the workflow to Android and uses the ExecuTorch Java API for
   semantic segmentation.
 - Module 4 covers the Arm backend, Ethos-U, TOSA, Vela, the Corstone-320 FVP,
-  ETRecord, ETDump, and an embedded C++ application.
+  and an embedded C++ application.
 
 ## Investigation priority
 
@@ -145,6 +146,12 @@ portable Python bindings used by the course.
   files. Do not treat generated artifacts as source code.
 - `results/` contains benchmark and analysis output.
 
+When adding a third-party model, dataset, or image:
+
+- add a short learner notice before the first download or use
+- include source and licence fields in `model_spec.json` when the workflow
+  generates one
+
 The invoked script is the source of
 truth for the implemented API calls.
 
@@ -206,11 +213,11 @@ search rather than assuming the list is exhaustive.
 
 ### Module 1
 
-- `module-1-transformer-inference-with-xnnpack/scripts/aot/prepare_opt125m.py`
+- `module-1-transformer-inference-with-xnnpack/scripts/aot/prepare_gpt2.py`
 - `module-1-transformer-inference-with-xnnpack/scripts/aot/prepare_distilbert_fillmask.py`
 - `module-1-transformer-inference-with-xnnpack/scripts/aot/lower_to_executorch.py`
 - `module-1-transformer-inference-with-xnnpack/scripts/pi/benchmark_model.py`
-- `module-1-transformer-inference-with-xnnpack/scripts/pi/core/opt_chat_core.py`
+- `module-1-transformer-inference-with-xnnpack/scripts/pi/core/gpt2_generation_core.py`
 - `module-1-transformer-inference-with-xnnpack/scripts/pi/core/distilbert_autocomplete_core.py`
 - `module-1-transformer-inference-with-xnnpack/scripts/_support/common.py`
 
@@ -251,7 +258,6 @@ Java package. Start with `ExecuTorchSegmenter.java` for the runtime API.
 
 - `module-4-ethos-npu-accelerated-inference/scripts/aot/lower_fp32_ethosu.py`
 - `module-4-ethos-npu-accelerated-inference/scripts/aot/quantize_lower_ethosu.py`
-- `module-4-ethos-npu-accelerated-inference/scripts/aot/dump_tosa_artifacts.py`
 - `module-4-ethos-npu-accelerated-inference/scripts/fvp/create_mobilenetv2_input.py`
 - `module-4-ethos-npu-accelerated-inference/scripts/fvp/decode_mobilenetv2_output.py`
 - `module-4-ethos-npu-accelerated-inference/apps/fvp_image_classifier/arm_executor_runner_topk.patch`

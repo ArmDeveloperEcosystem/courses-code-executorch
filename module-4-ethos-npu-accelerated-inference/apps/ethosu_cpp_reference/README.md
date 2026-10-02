@@ -25,8 +25,8 @@ structure easier to adapt for a physical board.
 
 ## Build
 
-Complete the Module 4 AOT, input-preparation, and **Build the ETDump-Enabled
-Runner** steps first. You do not need to run that runner on the FVP before
+Complete the Module 4 AOT, input-preparation, and **Build the runner** steps
+first. You do not need to run that runner on the FVP before
 building this application. The earlier build step is required because this
 application reuses the target-specific ExecuTorch libraries it produces.
 
@@ -39,8 +39,8 @@ You need:
   `module-4-ethos-npu-accelerated-inference/artifacts/fvp_runner/mobilenetv2_int8`
 
 The runner build directory contains the ExecuTorch runtime, Ethos-U delegate,
-kernel, and CMSIS libraries compiled for the same U85 target and tracing
-configuration. Reusing them avoids compiling a second copy and keeps the
+kernel, and CMSIS libraries compiled for the same U85 target. Reusing them
+avoids compiling a second copy and keeps the
 application ABI consistent with the runner build.
 
 In each new shell, activate the ExecuTorch environment and add the downloaded
@@ -77,12 +77,7 @@ cmake --fresh \
 ```
 
 `TARGET_CPU=cortex-m85` selects the Corstone-320 startup files and CMSIS device
-definitions. CMake reads the runner build's event-tracing setting and applies
-the same setting to the application because it is part of the runtime ABI. If
-ETDump is enabled, the application links the ETDump and FlatCC libraries and
-passes an `ETDumpGen` event tracer to `Program::load_method()`. It does not
-capture intermediate tensors or print an ETDump payload; the tracer is present
-to match the runtime configuration used by the runner build.
+definitions.
 
 Build the ELF:
 
@@ -145,5 +140,5 @@ target after checking the memory plan and the target memory map.
 
 ## Further Reading
 
-- [Run an ExecuTorch model using the C++ runtime](https://docs.pytorch.org/executorch/stable/runtime-how-to.html)
+- [Run an ExecuTorch model using the C++ runtime](https://docs.pytorch.org/executorch/stable/running-a-model-cpp-tutorial.html)
 - [Arm Ethos-U backend overview](https://docs.pytorch.org/executorch/stable/backends/arm-ethos-u/arm-ethos-u-overview.html)

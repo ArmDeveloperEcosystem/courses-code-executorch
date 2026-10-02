@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
+# Prepare LR-ASPP weights, labels, sample image, and Android model contract.
+
 from __future__ import annotations
 
 import argparse
-from contextlib import contextmanager
 import hashlib
 import json
 import logging
 import os
 from pathlib import Path
-from typing import Any
 from urllib.request import Request, urlopen
 import warnings
 
@@ -44,6 +44,7 @@ VOC_SEGMENTATION_LABELS = [
 
 
 def main() -> None:
+    # Script setup: command-line options and output paths.
     parser = argparse.ArgumentParser(description="Prepare LR-ASPP MobileNetV3 assets for Android cutout.")
     parser.add_argument("--out", type=Path, default=Path("module-3-executorch-on-android-semantic-segmentation/artifacts/lraspp_mobilenetv3"))
     parser.add_argument("--weights-name", default="lraspp_mobilenetv3.pth")
@@ -59,18 +60,17 @@ def main() -> None:
 
     configure_quiet_output()
 
-    with suppress_stderr():
-        import torch
-        from torchvision.models.segmentation import LRASPP_MobileNet_V3_Large_Weights, lraspp_mobilenet_v3_large
+    import torch
+    from torchvision.models.segmentation import LRASPP_MobileNet_V3_Large_Weights, lraspp_mobilenet_v3_large
 
     args.out.mkdir(parents=True, exist_ok=True)
     weights_path = args.out / args.weights_name
     labels_path = args.out / args.labels_name
     sample_path = args.out / args.sample_name
 
+    # TorchVision API: load the pinned pretrained segmentation weights.
     weights = LRASPP_MobileNet_V3_Large_Weights.DEFAULT
-    with suppress_stderr():
-        model = lraspp_mobilenet_v3_large(weights=weights).eval()
+    model = lraspp_mobilenet_v3_large(weights=weights).eval()
     torch.save(model.state_dict(), weights_path)
     labels_path.write_text(json.dumps(VOC_SEGMENTATION_LABELS, indent=2) + "\n")
 
@@ -80,12 +80,25 @@ def main() -> None:
     print(f"Downloading sample image to {sample_path}...")
     sample_sha256 = download_sample(args.sample_url, sample_path, expected_sample_sha256)
 
+    # Record the tensor shapes and preprocessing shared by Python and Android.
     spec = {
         "adapter": "lraspp_mobilenetv3_cutout",
         "name": "lraspp_mobilenetv3",
         "model_family": "semantic_segmentation",
         "model_variant": "lraspp_mobilenet_v3_large",
         "task": "object_cutout",
+        "model_source": {
+            "provider": "TorchVision",
+            "documentation": "https://docs.pytorch.org/vision/main/models/generated/torchvision.models.segmentation.lraspp_mobilenet_v3_large.html",
+            "weights_variant": "COCO_WITH_VOC_LABELS_V1",
+            "source_code_license": "BSD-3-Clause",
+            "source_code_license_url": "https://github.com/pytorch/vision/blob/main/LICENSE",
+            "training_dataset": "COCO subset with Pascal VOC categories",
+            "dataset_terms": [
+                "https://cocodataset.org/#termsofuse",
+                "https://www.robots.ox.ac.uk/~vgg/projects/pascal/VOC/",
+            ],
+        },
         "weights": args.weights_name,
         "labels": args.labels_name,
         "sample_image": args.sample_name,
@@ -96,7 +109,7 @@ def main() -> None:
             "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
             "source_page": SAMPLE_SOURCE_PAGE if args.sample_url == SAMPLE_URL else args.sample_url,
             "source": "Wikimedia Commons",
-            "author": "Chiemsee2024",
+            "author": "Chiemsee2016",
             "sha256": sample_sha256,
         },
         "input": {
@@ -131,6 +144,7 @@ def main() -> None:
 
 
 def configure_quiet_output() -> None:
+    # Supporting setup: filter known dependency warnings without hiding errors.
     os.environ.setdefault("GLOG_minloglevel", "2")
     os.environ.setdefault("TORCH_CPP_LOG_LEVEL", "ERROR")
     os.environ.setdefault("PYTHONWARNINGS", "ignore")
@@ -147,21 +161,8 @@ def configure_quiet_output() -> None:
     ):
         logging.getLogger(name).setLevel(logging.ERROR)
 
-
-@contextmanager
-def suppress_stderr() -> Any:
-    saved_stderr = os.dup(2)
-    devnull = os.open(os.devnull, os.O_WRONLY)
-    try:
-        os.dup2(devnull, 2)
-        yield
-    finally:
-        os.dup2(saved_stderr, 2)
-        os.close(saved_stderr)
-        os.close(devnull)
-
-
 def download_sample(url: str, path: Path, expected_sha256: str | None) -> str:
+    # Download the validation image once and verify its expected content.
     if path.exists():
         current_sha256 = file_sha256(path)
         if expected_sha256 is None or current_sha256 == expected_sha256:
@@ -181,6 +182,7 @@ def download_sample(url: str, path: Path, expected_sha256: str | None) -> str:
 
 
 def file_sha256(path: Path) -> str:
+    # Hash a file in chunks so large artifacts do not need to fit in memory.
     digest = hashlib.sha256()
     with path.open("rb") as file:
         for chunk in iter(lambda: file.read(1024 * 1024), b""):

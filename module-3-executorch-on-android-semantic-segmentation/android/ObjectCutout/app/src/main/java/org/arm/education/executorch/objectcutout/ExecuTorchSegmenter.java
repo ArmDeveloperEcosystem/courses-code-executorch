@@ -24,6 +24,8 @@ final class ExecuTorchSegmenter {
         File modelFile = AssetUtils.copyAssetToFiles(context, MODEL_ASSET);
         labels = AssetUtils.readJsonStringArray(context, LABELS_ASSET);
         spec = ModelSpec.load(context, MODEL_SPEC_ASSET, labels);
+
+        // ExecuTorch Android API: load the packaged .pte once for this segmenter.
         module = Module.load(modelFile.getAbsolutePath());
     }
 
@@ -33,10 +35,14 @@ final class ExecuTorchSegmenter {
         long preprocessMs = elapsedMs(preprocessStart);
 
         long forwardStart = System.nanoTime();
+        // ExecuTorch Android API: wrap the app-owned NCHW float array as a tensor.
         Tensor inputTensor = Tensor.fromBlob(
                 input.tensor,
                 spec.inputShape
         );
+
+        // ExecuTorch Android API: call the exported forward method and read its
+        // single segmentation-logits tensor.
         EValue output = module.forward(EValue.from(inputTensor))[0];
         Tensor outputTensor = output.toTensor();
         if (!Arrays.equals(outputTensor.shape(), spec.outputShape)) {
@@ -70,6 +76,7 @@ final class ExecuTorchSegmenter {
     }
 
     void close() {
+        // Release the native ExecuTorch module with the Android component.
         module.close();
     }
 }

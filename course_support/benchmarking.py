@@ -1,3 +1,5 @@
+# Shared timing, statistics, plots, and result serialization for course benchmarks.
+
 from __future__ import annotations
 
 from contextlib import contextmanager
@@ -11,6 +13,7 @@ from typing import Callable, Iterator
 
 
 def benchmark(fn: Callable[[], object], *, warmups: int, runs: int) -> tuple[list[float], dict[str, float | int]]:
+    # Warm up one inference callable, time each run, and summarize its latency.
     import numpy as np
 
     for _ in range(warmups):
@@ -39,6 +42,7 @@ def benchmark(fn: Callable[[], object], *, warmups: int, runs: int) -> tuple[lis
 
 
 def save_plots(times_ms: list[float], *, title: str, out_dir: Path) -> list[Path]:
+    # Write latency-distribution and run-order plots for a benchmark result.
     import matplotlib
 
     matplotlib.use("Agg")
@@ -88,6 +92,7 @@ def write_results(
     stats: dict[str, float | int],
     extra: dict[str, object],
 ) -> None:
+    # Write machine-readable JSON metadata and per-run CSV timings.
     out.parent.mkdir(parents=True, exist_ok=True)
     payload = {
         "runtime": runtime,
@@ -111,6 +116,7 @@ def write_results(
 
 
 def print_stats(name: str, stats: dict[str, float | int], *, warmups: int) -> None:
+    # Print the small statistics table shown in the course instructions.
     print(f"\n{name}")
     print("=" * len(name))
     print(f"Warmups: {warmups}")
@@ -123,6 +129,11 @@ def print_stats(name: str, stats: dict[str, float | int], *, warmups: int) -> No
 
 @contextmanager
 def suppress_stderr() -> Iterator[None]:
+    # Benchmark loops can print the same native message for every timed call.
+    # Set COURSE_DEBUG=1 to keep native diagnostics visible.
+    if os.environ.get("COURSE_DEBUG") == "1":
+        yield
+        return
     saved_stderr = os.dup(2)
     devnull = os.open(os.devnull, os.O_WRONLY)
     try:

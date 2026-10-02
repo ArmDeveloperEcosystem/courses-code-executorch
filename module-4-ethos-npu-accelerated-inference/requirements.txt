@@ -1,7 +1,9 @@
+# Known-good Module 4 add-on environment, tested with Python 3.12.14.
 # Module 4 uses the ExecuTorch source virtual environment because the Arm
 # backend is loaded from that checkout. That environment supplies torch,
 # torchao, and executorch; this file supplies the remaining Python packages.
 # Activate ~/executorch/.venv first. TorchVision must match its PyTorch wheel.
 --extra-index-url https://download.pytorch.org/whl/test/cpu
-torchvision==0.28.0+cpu
-pillow
+
+torchvision==0.29.0+cpu
+pillow==12.3.0

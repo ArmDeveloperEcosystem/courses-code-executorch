@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# Download the pinned YOLOv8 package and normalize its application contract.
+
 from __future__ import annotations
 
 import argparse
@@ -95,6 +97,7 @@ COCO_LABELS = [
 
 
 def main() -> None:
+    # Fetch the model snapshot and prepare the files consumed by the web demo.
     parser = argparse.ArgumentParser(
         description="Download the AI Portal YOLOv8s INT8 ExecuTorch with XNNPACK model package."
     )
@@ -138,6 +141,7 @@ def main() -> None:
 
 
 def copy_model_files(source: Path, out: Path) -> list[Path]:
+    # Flatten supported files from the snapshot into the course artifact folder.
     copied: list[Path] = []
     destinations: set[Path] = set()
     for path in source.rglob("*"):
@@ -157,6 +161,7 @@ def copy_model_files(source: Path, out: Path) -> list[Path]:
 
 
 def ensure_app_contract(out: Path, repo_id: str, revision: str) -> list[Path]:
+    # Ensure labels and model_spec.json contain everything the runner expects.
     written: list[Path] = []
 
     labels_path = out / "coco_labels.json"
@@ -180,6 +185,7 @@ def ensure_app_contract(out: Path, repo_id: str, revision: str) -> list[Path]:
 
 
 def select_pte(out: Path) -> Path:
+    # Prefer the optimized INT8 artifact when a package contains several .pte files.
     pte_files = sorted(out.glob("*.pte"))
     if not pte_files:
         raise FileNotFoundError(f"No .pte artifact found in {out}")
@@ -195,6 +201,7 @@ def select_pte(out: Path) -> Path:
 def normalize_spec(
     spec: dict[str, Any], repo_id: str, revision: str, pte_name: str
 ) -> bool:
+    # Add missing contract fields while preserving metadata supplied by the package.
     before = json.dumps(spec, sort_keys=True)
     spec.setdefault("adapter", "yolov8_detection")
     spec.setdefault("name", "yolov8s_int8_xnnpack")
@@ -205,7 +212,8 @@ def normalize_spec(
     spec.setdefault("backend", "xnnpack")
     spec.setdefault("precision", "int8")
     spec.setdefault("optimizations", ["xnnpack", "kleidiai"])
-    spec.setdefault("license", "AGPL-3.0")
+    spec.setdefault("license", "AGPL-3.0-or-later")
+    spec.setdefault("license_url", f"https://huggingface.co/{repo_id}")
     spec["pte"] = pte_name
     spec["labels"] = "coco_labels.json"
     source = spec.setdefault("source", {})
@@ -265,6 +273,7 @@ def normalize_spec(
 def write_default_spec(
     path: Path, repo_id: str, revision: str, pte_name: str
 ) -> None:
+    # Write the known YOLOv8 contract when the downloaded package has no spec.
     spec: dict[str, Any] = {
         "adapter": "yolov8_detection",
         "name": "yolov8s_int8_xnnpack",
@@ -275,7 +284,8 @@ def write_default_spec(
         "backend": "xnnpack",
         "precision": "int8",
         "optimizations": ["xnnpack", "kleidiai"],
-        "license": "AGPL-3.0",
+        "license": "AGPL-3.0-or-later",
+        "license_url": f"https://huggingface.co/{repo_id}",
         "pte": pte_name,
         "source": {
             "ai_portal": "Arm AI Portal model garden",

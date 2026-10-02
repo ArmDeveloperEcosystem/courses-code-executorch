@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# Decode a raw FVP output tensor into labelled MobileNetV2 predictions.
+
 from __future__ import annotations
 
 import argparse
@@ -17,6 +19,7 @@ DTYPE_BYTES = {
 
 
 def main() -> None:
+    # Read raw output bytes, validate their shape, and print top-k results.
     parser = argparse.ArgumentParser(description="Decode a raw MobileNetV2 output tensor from the FVP runner.")
     parser.add_argument("--output", type=Path, default=Path("module-4-ethos-npu-accelerated-inference/artifacts/fvp_runs/mobilenetv2_int8/out-0.bin"))
     parser.add_argument("--labels", type=Path, default=Path("module-4-ethos-npu-accelerated-inference/artifacts/mobilenetv2/imagenet_labels.json"))
@@ -64,6 +67,7 @@ def main() -> None:
 
 
 def infer_dtype(path: Path, num_labels: int, requested: str) -> str:
+    # Infer the tensor dtype from byte count when the runner did not record it.
     if requested != "auto":
         return requested
 
@@ -81,6 +85,7 @@ def infer_dtype(path: Path, num_labels: int, requested: str) -> str:
 
 
 def read_tensor(path: Path, dtype: str) -> list[float]:
+    # Decode little-endian runner output into Python numeric values.
     import struct
 
     data = path.read_bytes()
@@ -96,6 +101,7 @@ def read_tensor(path: Path, dtype: str) -> list[float]:
 
 
 def softmax(values: list[float]) -> list[float]:
+    # Convert FP32 logits to probabilities using a stable exponent shift.
     max_value = max(values)
     exps = [math.exp(value - max_value) for value in values]
     total = sum(exps)
@@ -103,6 +109,7 @@ def softmax(values: list[float]) -> list[float]:
 
 
 def topk_indices(values: Iterable[float], k: int) -> list[int]:
+    # Return indices of the k largest values in descending order.
     indexed = list(enumerate(values))
     indexed.sort(key=lambda item: item[1], reverse=True)
     return [index for index, _ in indexed[:k]]

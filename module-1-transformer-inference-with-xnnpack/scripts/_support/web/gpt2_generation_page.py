@@ -19,9 +19,9 @@ def render_page(
     startup: dict[str, str | float | int],
 ) -> str:
     examples = [
-        "The history of artificial intelligence started with",
-        "On a Raspberry Pi, efficient inference enables",
-        "ExecuTorch is useful when developers want to",
+        "The sun was setting over the mountains when",
+        "At the edge of the forest stood a small cottage. Inside,",
+        "In a distant future, humans and robots",
     ]
     example_buttons = "".join(
         f'<button type="button" class="example" data-prompt="{html.escape(text)}">{html.escape(text)}</button>'
@@ -36,7 +36,7 @@ def render_page(
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <title>OPT ExecuTorch Demo</title>
+  <title>GPT-2 ExecuTorch Demo</title>
   <style>
     :root {{
       --bg: #f5ecdd;
@@ -211,7 +211,7 @@ def render_page(
 <body>
   <main class="shell">
     <section class="hero">
-      <h1>OPT-125M on ExecuTorch</h1>
+      <h1>GPT-2 on ExecuTorch</h1>
       <p class="lede">A Pi-hosted text generation demo using the lowered XNNPACK model.</p>
       <div class="meta">
         <div class="pill">Model: {html.escape(str(startup["model"]))}</div>

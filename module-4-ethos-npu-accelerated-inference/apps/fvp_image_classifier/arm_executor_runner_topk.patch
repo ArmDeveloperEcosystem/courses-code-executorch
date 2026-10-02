@@ -1,15 +1,15 @@
 diff --git a/arm_executor_runner.cpp b/arm_executor_runner.cpp
 --- a/arm_executor_runner.cpp
 +++ b/arm_executor_runner.cpp
-@@ -114,6 +114,7 @@
+@@ -119,6 +119,7 @@
  
  #include "arm_memory_allocator.h"
  #include "arm_perf_monitor.h"
 +#include "imagenet_labels.h"
  
- #if defined(ET_BUNDLE_IO)
- #include <executorch/devtools/bundled_program/bundled_program.h>
-@@ -935,6 +936,77 @@
+ // newlib-nano printf does not reliably handle the z length modifier. Values
+ // logged or printed by this runner use unsigned long with %lu instead of size_t
+@@ -1056,6 +1057,77 @@
  #endif
  }
  
@@ -87,7 +87,7 @@ diff --git a/arm_executor_runner.cpp b/arm_executor_runner.cpp
  void print_outputs(RunnerContext& ctx) {
    std::vector<EValue> outputs(ctx.method.value()->outputs_size());
    ET_LOG(Info, "%lu outputs: ", static_cast<unsigned long>(outputs.size()));
-@@ -946,6 +1018,7 @@
+@@ -1070,6 +1142,7 @@
    for (int i = 0; i < outputs.size(); ++i) {
      if (outputs[i].isTensor()) {
        Tensor tensor = outputs[i].toTensor();

@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# Shared letterbox and normalization logic for calibration and validation.
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -7,6 +9,7 @@ from typing import Any
 
 @dataclass(frozen=True)
 class LetterboxedImage:
+    # Keep the resized image and padding needed to restore output coordinates.
     image: Any
     pad_left: int
     pad_top: int
@@ -15,6 +18,7 @@ class LetterboxedImage:
 
 
 def letterbox_image(image: Any, spec: dict[str, Any]) -> LetterboxedImage:
+    # Resize without distortion and center the image on the model canvas.
     from PIL import Image
 
     prep = spec["input"]["preprocessing"]
@@ -39,6 +43,7 @@ def letterbox_image(image: Any, spec: dict[str, Any]) -> LetterboxedImage:
 
 
 def preprocess_tensor(image: Any, spec: dict[str, Any]) -> Any:
+    # Convert the letterboxed image to the normalized CHW model input.
     import torchvision.transforms.functional as functional
 
     letterboxed = letterbox_image(image, spec)

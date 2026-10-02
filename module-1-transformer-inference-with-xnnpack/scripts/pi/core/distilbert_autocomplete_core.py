@@ -1,3 +1,5 @@
+# ExecuTorch fill-mask inference used by the Module 1 autocomplete demo.
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -47,6 +49,7 @@ class FillMaskResult:
 
 @dataclass
 class DistilBertAutocompleteRunner:
+    # Turn fill-mask vocabulary logits into readable word suggestions.
     spec: dict[str, Any]
     tokenizer: Any
     model: Any
@@ -57,6 +60,7 @@ class DistilBertAutocompleteRunner:
         return str(self.tokenizer.mask_token)
 
     def suggest(self, prompt: str, *, topk: int) -> FillMaskResult:
+        # Append one mask, run the .pte, and decode the highest-scoring words.
         import torch
 
         started = time.perf_counter()
@@ -75,10 +79,13 @@ class DistilBertAutocompleteRunner:
         input_ids = encoded["input_ids"]
         attention_mask = encoded["attention_mask"]
 
+        # ExecuTorch Python runtime: invoke the exported forward method.
         with suppress_stderr():
             logits = self.model.forward((input_ids, attention_mask))[0]
 
         scores = torch.softmax(logits[0], dim=-1)
+        # Inspect more logits than the requested count because subword pieces
+        # and special tokens are filtered out below.
         candidate_count = min(max(50, topk * 8), int(scores.numel()))
         top = torch.topk(scores, candidate_count)
         mask_idx = (input_ids[0] == self.tokenizer.mask_token_id).nonzero(as_tuple=True)[0].item()
@@ -102,28 +109,29 @@ class DistilBertAutocompleteRunner:
         )
 
     def mask_at_end(self, text: str) -> str:
+        # Append the mask token when the supplied text does not end with one.
         if text.endswith(self.mask_token):
             return text
         return f"{text.rstrip()} {self.mask_token}"
 
 
 def is_word_suggestion(token: str, token_piece: str, special_tokens: list[str]) -> bool:
+    # Reject special tokens, continuation pieces, and non-word candidates.
     if token_piece in special_tokens or token_piece.startswith("##"):
         return False
     return bool(WORD_RE.fullmatch(token))
 
 
 def load_distilbert_autocomplete_runner(spec_path: Path, pte_path: Path) -> DistilBertAutocompleteRunner:
+    # Load the tokenizer, model contract, and ExecuTorch program once at startup.
     configure_quiet_output(include_transformers=True)
 
-    with suppress_stderr():
-        from transformers import AutoTokenizer
+    from transformers import AutoTokenizer
 
     load_started = time.perf_counter()
     spec = json.loads(spec_path.read_text())
-    with suppress_stderr():
-        tokenizer = AutoTokenizer.from_pretrained(spec["model_id"], use_fast=True)
-        model = load_executorch_program(pte_path)
+    tokenizer = AutoTokenizer.from_pretrained(spec["model_id"], use_fast=True)
+    model = load_executorch_program(pte_path)
 
     startup = {
         "model": spec["model_id"],

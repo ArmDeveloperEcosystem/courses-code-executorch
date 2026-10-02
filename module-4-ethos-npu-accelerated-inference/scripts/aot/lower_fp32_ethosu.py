@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
+# Test how an FP32 MobileNetV2 graph partitions for an Ethos-U target.
+
 from __future__ import annotations
 
 import argparse
 from collections import Counter
-from contextlib import contextmanager
 import json
 import logging
 import os
@@ -13,6 +14,7 @@ import warnings
 
 
 def main() -> None:
+    # Script setup: command-line options, paths, and known dependency warnings.
     parser = argparse.ArgumentParser(description="Attempt FP32 MobileNetV2 lowering with the Ethos-U partitioner.")
     parser.add_argument("--spec", type=Path, default=Path("module-4-ethos-npu-accelerated-inference/artifacts/mobilenetv2/model_spec.json"))
     parser.add_argument("--out", type=Path, default=None)
@@ -21,28 +23,33 @@ def main() -> None:
 
     configure_quiet_output()
 
-    with suppress_stderr():
-        import torch
-        from torchvision.models import mobilenet_v2
+    import torch
+    from torchvision.models import mobilenet_v2
 
     spec = json.loads(args.spec.read_text())
     artifact_dir = args.spec.parent
     out = args.out or artifact_dir / "mobilenetv2_fp32_ethosu.pte"
 
-    with suppress_stderr():
-        model = mobilenet_v2(weights=None).eval()
-        model.load_state_dict(torch.load(artifact_dir / spec["weights"], map_location="cpu"))
+    # 1. Rebuild the PyTorch model and create an input with the deployed shape.
+    model = mobilenet_v2(weights=None).eval()
+    model.load_state_dict(torch.load(artifact_dir / spec["weights"], map_location="cpu"))
 
     example_inputs = (torch.randn(*spec["input"]["shape"]),)
+
+    # 2. PyTorch API: capture the model as an ExportedProgram.
     print("Exporting FP32 MobileNetV2...")
-    with torch.inference_mode(), suppress_stderr():
+    with torch.inference_mode():
+        # Course wrapper: export_no_guards() contains the PyTorch export APIs.
         exported = export_no_guards(model, example_inputs)
 
+    # 3. Course wrappers: these functions contain the ExecuTorch APIs for
+    # Ethos-U delegation, runtime-program conversion, and serialization.
     print(f"Lowering with Ethos-U target {args.target}...")
     edge = lower_to_ethosu(exported, args)
     program = to_executorch(edge)
     write_pte(program, out)
 
+    # Supporting output: record target settings and delegation for comparison.
     metadata = {
         "model": spec["name"],
         "backend": "ethosu",
@@ -65,6 +72,7 @@ def main() -> None:
 
 
 def add_ethosu_args(parser: argparse.ArgumentParser) -> None:
+    # Add the target, memory, and Vela options shared by Ethos-U lowering.
     parser.add_argument("--target", default="ethos-u85-256")
     parser.add_argument("--system-config", default="Ethos_U85_SYS_DRAM_Mid")
     parser.add_argument("--memory-mode", default="Shared_Sram")
@@ -72,6 +80,8 @@ def add_ethosu_args(parser: argparse.ArgumentParser) -> None:
 
 
 def export_no_guards(model: Any, example_inputs: tuple[Any, ...]) -> Any:
+    # Course wrapper around two torch.export.export() calls. The second export
+    # removes input-value guards from the first exported graph module.
     import torch
 
     first = torch.export.export(model, example_inputs)
@@ -80,6 +90,8 @@ def export_no_guards(model: Any, example_inputs: tuple[Any, ...]) -> Any:
 
 
 def lower_to_ethosu(exported: Any, args: argparse.Namespace) -> Any:
+    # Course wrapper around ExecuTorch's EthosUPartitioner and
+    # to_edge_transform_and_lower() APIs.
     from executorch.backends.arm.ethosu import EthosUCompileSpec, EthosUPartitioner
     from executorch.exir import EdgeCompileConfig, to_edge_transform_and_lower
 
@@ -97,12 +109,14 @@ def lower_to_ethosu(exported: Any, args: argparse.Namespace) -> Any:
 
 
 def to_executorch(edge: Any) -> Any:
+    # Course wrapper around edge.to_executorch() and ExecutorchBackendConfig.
     from executorch.exir import ExecutorchBackendConfig
 
     return edge.to_executorch(ExecutorchBackendConfig(extract_delegate_segments=True))
 
 
 def inspect_delegation(edge: Any) -> dict[str, Any]:
+    # Count Ethos-U delegate calls and operations left on the default path.
     import torch
 
     graph = edge.exported_program().graph_module.graph
@@ -134,6 +148,7 @@ def print_delegation(summary: dict[str, Any], *, max_ops: int = 30) -> None:
 
 
 def write_pte(program: Any, path: Path) -> None:
+    # Course wrapper around the serialization APIs in the pinned ExecuTorch version.
     path.parent.mkdir(parents=True, exist_ok=True)
     if hasattr(program, "save"):
         program.save(str(path))
@@ -146,25 +161,12 @@ def write_pte(program: Any, path: Path) -> None:
 
 
 def configure_quiet_output() -> None:
+    # Supporting setup: filter known warnings without hiding export failures.
     os.environ.setdefault("GLOG_minloglevel", "2")
     os.environ.setdefault("TORCH_CPP_LOG_LEVEL", "ERROR")
     os.environ.setdefault("PYTHONWARNINGS", "ignore")
     warnings.filterwarnings("ignore", category=FutureWarning)
     logging.getLogger().setLevel(logging.ERROR)
-
-
-@contextmanager
-def suppress_stderr() -> Any:
-    saved_stderr = os.dup(2)
-    devnull = os.open(os.devnull, os.O_WRONLY)
-    try:
-        os.dup2(devnull, 2)
-        yield
-    finally:
-        os.dup2(saved_stderr, 2)
-        os.close(saved_stderr)
-        os.close(devnull)
-
 
 if __name__ == "__main__":
     main()

@@ -1,23 +1,25 @@
 #!/usr/bin/env python3
+# Quantize MobileNetV2 and lower it to Ethos-U.
+
 from __future__ import annotations
 
 import argparse
-import copy
 from collections import Counter
 from contextlib import contextmanager
 import json
 import logging
 import os
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterator
 import warnings
 
 
 def main() -> None:
+    # Script setup: command-line options, paths, and known dependency warnings.
     parser = argparse.ArgumentParser(description="Quantize MobileNetV2 and lower to ExecuTorch Ethos-U.")
     parser.add_argument("--spec", type=Path, default=Path("module-4-ethos-npu-accelerated-inference/artifacts/mobilenetv2/model_spec.json"))
     parser.add_argument("--calibration-images", type=Path, required=True)
-    parser.add_argument("--num-calib", type=int, default=16)
+    parser.add_argument("--num-calib", type=int, default=100)
     parser.add_argument("--out", type=Path, default=None)
     parser.add_argument(
         "--validate-image",
@@ -26,7 +28,6 @@ def main() -> None:
         help="Compare FP32 and converted INT8 predictions before Ethos-U lowering.",
     )
     parser.add_argument("--insert-lrn", action="store_true", help="Insert LocalResponseNorm to demonstrate fragmentation.")
-    parser.add_argument("--etrecord", action="store_true", help="Write an ETRecord matching the generated PTE.")
     parser.add_argument(
         "--so-library",
         type=Path,
@@ -41,12 +42,11 @@ def main() -> None:
     if args.num_calib <= 0:
         raise ValueError("--num-calib must be greater than zero")
 
-    with suppress_stderr():
-        import torch
-        import torchvision.datasets as datasets
-        from torch.export import export
-        from torchao.quantization.pt2e.quantize_pt2e import convert_pt2e, prepare_pt2e
-        from torchvision.models import mobilenet_v2
+    import torch
+    import torchvision.datasets as datasets
+    from torch.export import export
+    from torchao.quantization.pt2e.quantize_pt2e import convert_pt2e, prepare_pt2e
+    from torchvision.models import mobilenet_v2
 
     for so_library in args.so_library:
         print(f"Loading custom ops from {so_library}...")
@@ -60,19 +60,24 @@ def main() -> None:
     if not args.calibration_images.exists():
         raise FileNotFoundError(f"Calibration images not found: {args.calibration_images}")
 
-    with suppress_stderr():
-        base_model = mobilenet_v2(weights=None).eval()
-        base_model.load_state_dict(torch.load(artifact_dir / spec["weights"], map_location="cpu"))
-        model = MobileNetV2WithLRN(base_model).eval() if args.insert_lrn else base_model
+    # 1. Rebuild the PyTorch model and optionally insert an unsupported operation.
+    base_model = mobilenet_v2(weights=None).eval()
+    base_model.load_state_dict(torch.load(artifact_dir / spec["weights"], map_location="cpu"))
+    model = MobileNetV2WithLRN(base_model).eval() if args.insert_lrn else base_model
 
     example_inputs = (torch.randn(*spec["input"]["shape"]),)
 
+    # 2. PyTorch API: capture the model graph used by PT2E.
     print("Exporting model for PT2E quantization...")
-    with torch.inference_mode(), suppress_stderr():
+    with torch.inference_mode():
         exported = export(model, example_inputs)
         graph_module = exported.module(check_guards=False)
 
     print("Preparing Ethos-U quantization...")
+    # 3. ExecuTorch backend and PT2E APIs: configure Ethos-U quantization and
+    # insert observers that record activation ranges during calibration.
+    # Course wrapper: make_quantizer() contains the ExecuTorch Ethos-U
+    # quantizer APIs. prepare_pt2e() below is a direct PyTorch API call.
     quantizer = make_quantizer(args)
     prepared = prepare_pt2e(graph_module, quantizer)
 
@@ -90,10 +95,12 @@ def main() -> None:
         for index, (image, _) in enumerate(calibration_loader):
             if index >= args.num_calib:
                 break
+            # Native libraries can repeat the same message for every image.
             with suppress_stderr():
                 prepared(image)
 
     print("Converting to INT8...")
+    # 4. PT2E API: replace the calibrated observers with quantized operations.
     quantized_model = convert_pt2e(prepared)
 
     validation = None
@@ -106,21 +113,20 @@ def main() -> None:
             labels_path=artifact_dir / spec["labels"],
         )
 
-    with torch.inference_mode(), suppress_stderr():
+    with torch.inference_mode():
+        # Course wrapper: export_no_guards() contains the PyTorch export APIs.
         exported_quantized = export_no_guards(quantized_model, example_inputs)
 
+    # 5. Course wrappers: these functions contain the ExecuTorch APIs that
+    # delegate supported regions and package delegate data inside the .pte.
+    # replace_boundary_quant_nodes() is course support code for Cortex-M boundaries.
     print(f"Lowering with Ethos-U target {args.target}...")
     edge = lower_to_ethosu(exported_quantized, args)
     edge = replace_boundary_quant_nodes(edge)
-    edge_for_etrecord = copy.deepcopy(edge) if args.etrecord else None
     program = to_executorch(edge)
     write_pte(program, out)
 
-    etrecord_path = None
-    if args.etrecord:
-        etrecord_path = out.with_suffix(".etrecord")
-        write_etrecord(edge_for_etrecord, program, etrecord_path)
-
+    # Supporting output: record target settings and delegation for comparison.
     metadata = {
         "model": spec["name"],
         "backend": "ethosu",
@@ -131,7 +137,6 @@ def main() -> None:
         "memory_mode": args.memory_mode,
         "pte": str(out),
         "pte_size_mb": out.stat().st_size / 1_000_000.0,
-        "etrecord": str(etrecord_path) if etrecord_path else None,
         "num_calib": min(args.num_calib, len(calibration_loader.dataset)),
         "validation": validation,
         "delegation": inspect_delegation(edge),
@@ -141,13 +146,12 @@ def main() -> None:
 
     print(f"Wrote {out}")
     print(f"PTE size: {metadata['pte_size_mb']:.2f} MB")
-    if etrecord_path:
-        print(f"Wrote {etrecord_path}")
     print_delegation(metadata["delegation"])
 
 
 class MobileNetV2WithLRN:
-    """MobileNetV2 variant used to show how one model change can split delegation."""
+    # Insert LocalResponseNorm between the feature extractor and classifier to
+    # show how one unsupported operation splits an Ethos-U delegated region.
 
     def __init__(self, base_model: Any):
         import torch
@@ -174,6 +178,7 @@ class MobileNetV2WithLRN:
 
 
 def add_ethosu_args(parser: argparse.ArgumentParser) -> None:
+    # Add the target, memory, and Vela options shared by quantization and lowering.
     parser.add_argument("--target", default="ethos-u85-256")
     parser.add_argument("--system-config", default="Ethos_U85_SYS_DRAM_Mid")
     parser.add_argument("--memory-mode", default="Shared_Sram")
@@ -181,6 +186,7 @@ def add_ethosu_args(parser: argparse.ArgumentParser) -> None:
 
 
 def make_quantizer(args: argparse.Namespace) -> Any:
+    # Course wrapper around ExecuTorch's EthosUCompileSpec and EthosUQuantizer APIs.
     from executorch.backends.arm.ethosu import EthosUCompileSpec
     from executorch.backends.arm.quantizer import EthosUQuantizer, get_symmetric_quantization_config
 
@@ -196,6 +202,8 @@ def make_quantizer(args: argparse.Namespace) -> Any:
 
 
 def lower_to_ethosu(exported: Any, args: argparse.Namespace) -> Any:
+    # Course wrapper around ExecuTorch's EthosUPartitioner and
+    # to_edge_transform_and_lower() APIs.
     from executorch.backends.arm.ethosu import EthosUCompileSpec, EthosUPartitioner
     from executorch.exir import EdgeCompileConfig, to_edge_transform_and_lower
 
@@ -213,6 +221,7 @@ def lower_to_ethosu(exported: Any, args: argparse.Namespace) -> Any:
 
 
 def to_executorch(edge: Any) -> Any:
+    # Course wrapper around edge.to_executorch() and ExecutorchBackendConfig.
     from executorch.exir import ExecutorchBackendConfig
 
     return edge.to_executorch(
@@ -221,6 +230,7 @@ def to_executorch(edge: Any) -> Any:
 
 
 def replace_boundary_quant_nodes(edge: Any) -> Any:
+    # Rewrite delegate-boundary quantization into the Cortex-M runtime form.
     from executorch.backends.cortex_m.passes.replace_quant_nodes_pass import (
         ReplaceQuantNodesPass,
     )
@@ -229,6 +239,8 @@ def replace_boundary_quant_nodes(edge: Any) -> Any:
 
 
 def export_no_guards(model: Any, example_inputs: tuple[Any, ...]) -> Any:
+    # Course wrapper around two torch.export.export() calls. The second export
+    # removes input-value guards from the first exported graph module.
     import torch
 
     first = torch.export.export(model, example_inputs)
@@ -237,6 +249,7 @@ def export_no_guards(model: Any, example_inputs: tuple[Any, ...]) -> Any:
 
 
 def image_transform(spec: dict[str, Any]) -> Any:
+    # Use the same resize, crop, and normalization as deployment.
     import torchvision.transforms as transforms
 
     prep = spec["input"]["preprocessing"]
@@ -258,6 +271,7 @@ def validate_predictions(
     spec: dict[str, Any],
     labels_path: Path,
 ) -> dict[str, Any]:
+    # Compare FP32 and converted INT8 predictions before backend lowering.
     import torch
     from PIL import Image
 
@@ -269,7 +283,7 @@ def validate_predictions(
     labels = json.loads(labels_path.read_text())
     image = image_transform(spec)(Image.open(image_path).convert("RGB")).unsqueeze(0)
 
-    with torch.inference_mode(), suppress_stderr():
+    with torch.inference_mode():
         fp32_output = fp32_model(image)[0]
         int8_output = int8_model(image)[0]
 
@@ -284,6 +298,7 @@ def validate_predictions(
 
 
 def prediction_summary(output: Any, labels: list[str], *, top_k: int = 5) -> dict[str, Any]:
+    # Summarize logits and labelled probabilities for a validation check.
     import torch
 
     probabilities = torch.softmax(output, dim=0)
@@ -314,6 +329,7 @@ def print_prediction_summary(title: str, summary: dict[str, Any]) -> None:
 
 
 def inspect_delegation(edge: Any) -> dict[str, Any]:
+    # Count Ethos-U delegate calls and operations left on the default path.
     import torch
 
     graph = edge.exported_program().graph_module.graph
@@ -345,6 +361,7 @@ def print_delegation(summary: dict[str, Any], *, max_ops: int = 30) -> None:
 
 
 def write_pte(program: Any, path: Path) -> None:
+    # Course wrapper around the serialization APIs in the pinned ExecuTorch version.
     path.parent.mkdir(parents=True, exist_ok=True)
     if hasattr(program, "save"):
         program.save(str(path))
@@ -356,16 +373,8 @@ def write_pte(program: Any, path: Path) -> None:
             f.write(getattr(program, "buffer", None) or getattr(program, "_buffer"))
 
 
-def write_etrecord(edge: Any, program: Any, path: Path) -> None:
-    from executorch.devtools import generate_etrecord
-
-    if edge is None:
-        raise ValueError("ETRecord generation needs a copy of the edge program.")
-    path.parent.mkdir(parents=True, exist_ok=True)
-    generate_etrecord(str(path), edge, program)
-
-
 def configure_quiet_output() -> None:
+    # Supporting setup: filter known warnings without hiding export failures.
     os.environ.setdefault("GLOG_minloglevel", "2")
     os.environ.setdefault("TORCH_CPP_LOG_LEVEL", "ERROR")
     os.environ.setdefault("PYTHONWARNINGS", "ignore")
@@ -380,7 +389,13 @@ def configure_quiet_output() -> None:
 
 
 @contextmanager
-def suppress_stderr() -> Any:
+def suppress_stderr() -> Iterator[None]:
+    # Used only in repeated calibration loops where native output would appear
+    # once per image. Python tracebacks are printed after stderr is restored.
+    # Set COURSE_DEBUG=1 to keep native diagnostics visible.
+    if os.environ.get("COURSE_DEBUG") == "1":
+        yield
+        return
     saved_stderr = os.dup(2)
     devnull = os.open(os.devnull, os.O_WRONLY)
     try:

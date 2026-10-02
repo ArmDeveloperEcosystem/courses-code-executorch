@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
+# Validate a segmentation .pte and render its mask, overlay, and cutout.
+
 from __future__ import annotations
 
 import argparse
-from contextlib import contextmanager
 import json
 import logging
 import os
@@ -15,6 +16,7 @@ from segmentation_preprocessing import letterbox_image, preprocess_tensor
 
 
 def main() -> None:
+    # Script setup: command-line options, paths, and known dependency warnings.
     parser = argparse.ArgumentParser(description="Validate LR-ASPP .pte locally and write cutout previews.")
     parser.add_argument("--spec", type=Path, default=Path("module-3-executorch-on-android-semantic-segmentation/artifacts/lraspp_mobilenetv3/model_spec.json"))
     parser.add_argument("--pte", type=Path, default=Path("module-3-executorch-on-android-semantic-segmentation/artifacts/lraspp_mobilenetv3/lraspp_mobilenetv3_xnnpack.pte"))
@@ -24,9 +26,8 @@ def main() -> None:
 
     configure_quiet_output()
 
-    with suppress_stderr():
-        import torch
-        from executorch.extension.pybindings.portable_lib import _load_for_executorch
+    import torch
+    from executorch.extension.pybindings.portable_lib import _load_for_executorch
 
     spec = json.loads(args.spec.read_text())
     labels = json.loads((args.spec.parent / spec["labels"]).read_text())
@@ -34,12 +35,15 @@ def main() -> None:
     if image_path is None or not image_path.exists():
         raise FileNotFoundError("Pass --image or run prepare_lraspp_mobilenetv3.py to create sample.jpg.")
 
+    # Application preprocessing: create the NCHW tensor and retain crop geometry.
     input_tensor, letterboxed = preprocess_image(image_path, spec)
-    with suppress_stderr():
-        model = _load_for_executorch(str(args.pte))
+
+    # ExecuTorch Python runtime binding: load the packaged .pte program.
+    model = _load_for_executorch(str(args.pte))
 
     start = time.perf_counter()
-    with torch.inference_mode(), suppress_stderr():
+    # ExecuTorch Python runtime: invoke the exported forward method.
+    with torch.inference_mode():
         output = model.forward((input_tensor,))[0]
     inference_ms = (time.perf_counter() - start) * 1000.0
 
@@ -47,6 +51,8 @@ def main() -> None:
     if tuple(output.shape) != expected_shape:
         raise ValueError(f"Unexpected output shape {tuple(output.shape)}; expected {expected_shape}")
 
+    # Each output channel is one Pascal VOC class; argmax selects the winning
+    # class independently for every pixel.
     mask = output[0].argmax(dim=0).cpu().numpy().astype("uint8")
     background_class = spec["output"]["postprocessing"]["background_class"]
     class_id = largest_non_background(mask, background=background_class)
@@ -63,6 +69,7 @@ def main() -> None:
 
 
 def preprocess_image(path: Path, spec: dict[str, Any]) -> tuple[Any, Any]:
+    # Return both the model tensor and geometry needed to crop the output.
     from PIL import Image
 
     with Image.open(path) as source:
@@ -71,6 +78,7 @@ def preprocess_image(path: Path, spec: dict[str, Any]) -> tuple[Any, Any]:
 
 
 def largest_non_background(mask: Any, *, background: int) -> int:
+    # Choose the non-background class occupying the most pixels.
     import numpy as np
 
     ids, counts = np.unique(mask, return_counts=True)
@@ -81,6 +89,7 @@ def largest_non_background(mask: Any, *, background: int) -> int:
 
 
 def write_outputs(letterboxed: Any, mask: Any, class_id: int, out_dir: Path) -> None:
+    # Remove letterbox padding and write mask, overlay, and transparent cutout.
     from PIL import Image
     import numpy as np
 
@@ -107,6 +116,7 @@ def write_outputs(letterboxed: Any, mask: Any, class_id: int, out_dir: Path) -> 
 
 
 def configure_quiet_output() -> None:
+    # Supporting setup: filter known dependency warnings without hiding errors.
     os.environ.setdefault("GLOG_minloglevel", "2")
     os.environ.setdefault("TORCH_CPP_LOG_LEVEL", "ERROR")
     os.environ.setdefault("PYTHONWARNINGS", "ignore")
@@ -122,20 +132,6 @@ def configure_quiet_output() -> None:
         "executorch",
     ):
         logging.getLogger(name).setLevel(logging.ERROR)
-
-
-@contextmanager
-def suppress_stderr() -> Any:
-    saved_stderr = os.dup(2)
-    devnull = os.open(os.devnull, os.O_WRONLY)
-    try:
-        os.dup2(devnull, 2)
-        yield
-    finally:
-        os.dup2(saved_stderr, 2)
-        os.close(saved_stderr)
-        os.close(devnull)
-
 
 if __name__ == "__main__":
     main()

@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# Lower a Module 1 exported program to portable or XNNPACK ExecuTorch.
+
 from __future__ import annotations
 
 import argparse
@@ -17,6 +19,7 @@ from _support.common import configure_quiet_output
 
 
 def main() -> None:
+    # Script setup: command-line options, paths, and known dependency warnings.
     parser = argparse.ArgumentParser(description="Load an exported program, lower it, and write an ExecuTorch .pte artifact.")
     parser.add_argument("--spec", type=Path, required=True, help="Path to model_spec.json.")
     parser.add_argument("--backend", choices=["portable", "xnnpack"], required=True)
@@ -36,16 +39,21 @@ def main() -> None:
     exported_path = resolve_exported_path(args.spec, spec)
     out = resolve_output_path(args.out, spec_path=args.spec, spec=spec, backend=args.backend)
 
+    # 1. PyTorch API: load the ExportedProgram written by the prepare script.
     print(f"Loading exported program from {exported_path}...")
     exported_program = load(exported_path)
 
+    # 2. Course wrapper: lower() contains the ExecuTorch APIs that select
+    # backend delegation and convert the edge program for the runtime.
     print(f"Lowering {spec['name']} with {args.backend} backend...")
     program, delegation = lower(
         exported_program,
         backend=args.backend,
     )
+    # Course wrapper: write_pte() handles ExecuTorch version-specific serialization.
     write_pte(program, out)
 
+    # Supporting output: record artifact size and delegation for comparison.
     metadata = {
         "model": spec["name"],
         "model_id": spec["model_id"],
@@ -67,6 +75,7 @@ def main() -> None:
 
 
 def resolve_exported_path(spec_path: Path, spec: dict[str, Any]) -> Path:
+    # Resolve the exported-program path relative to model_spec.json.
     if "exported_program" not in spec:
         raise KeyError("Spec does not contain exported_program. Re-run the prepare script.")
     path = Path(spec["exported_program"])
@@ -74,6 +83,7 @@ def resolve_exported_path(spec_path: Path, spec: dict[str, Any]) -> Path:
 
 
 def resolve_output_path(out: Path | None, *, spec_path: Path, spec: dict[str, Any], backend: str) -> Path:
+    # Choose the requested .pte path or derive one from the model and backend.
     default_name = default_pte_name(spec, backend)
     if out is None:
         return spec_path.parent / default_name
@@ -87,14 +97,18 @@ def lower(
     *,
     backend: str,
 ) -> tuple[Any, dict[str, Any] | None]:
+    # Course wrapper around ExecuTorch's to_edge_transform_and_lower() and
+    # edge.to_executorch() APIs.
     from executorch.exir import to_edge_transform_and_lower
 
     if backend == "portable":
+        # No partitioner means every operation stays on portable kernels.
         edge = to_edge_transform_and_lower(exported_program)
         return edge.to_executorch(), None
 
     from executorch.backends.xnnpack.partition.xnnpack_partitioner import XnnpackPartitioner
 
+    # The partitioner replaces supported graph regions with XNNPACK delegate calls.
     edge = to_edge_transform_and_lower(
         exported_program,
         partitioner=[XnnpackPartitioner()],
@@ -103,6 +117,7 @@ def lower(
 
 
 def inspect_delegation(edge: Any) -> dict[str, Any]:
+    # Count XNNPACK regions and operators left on the portable path.
     import torch
 
     graph = edge.exported_program().graph_module.graph
@@ -127,6 +142,7 @@ def inspect_delegation(edge: Any) -> dict[str, Any]:
 
 
 def print_delegation(summary: dict[str, Any], *, max_ops: int = 30) -> None:
+    # Print a compact delegation summary for comparison with Model Explorer.
     print("\nDelegation")
     print("==========")
     print(f"XNNPACK delegate call sites: {summary['delegate_call_count']}")
@@ -138,6 +154,7 @@ def print_delegation(summary: dict[str, Any], *, max_ops: int = 30) -> None:
 
 
 def write_pte(program: Any, path: Path) -> None:
+    # Course wrapper around the serialization APIs in the pinned ExecuTorch version.
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("wb") as f:
         if hasattr(program, "write_to_file"):
@@ -150,6 +167,7 @@ def write_pte(program: Any, path: Path) -> None:
 
 
 def default_pte_name(spec: dict[str, Any], backend: str) -> str:
+    # Build a filesystem-safe artifact name from the model and backend.
     name = spec["name"].replace("/", "_").replace("-", "_")
     return f"{name}_{backend}.pte"
 

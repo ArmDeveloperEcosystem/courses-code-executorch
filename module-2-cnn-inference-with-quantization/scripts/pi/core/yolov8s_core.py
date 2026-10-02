@@ -1,14 +1,14 @@
+# YOLOv8 preprocessing, ExecuTorch inference, and detection postprocessing.
+
 from __future__ import annotations
 
-from contextlib import contextmanager
 from dataclasses import dataclass
 import json
-import logging
-import os
 from pathlib import Path
 import time
 from typing import Any
-import warnings
+
+from _support.common import configure_quiet_output, suppress_stderr
 
 
 @dataclass
@@ -27,6 +27,7 @@ class DetectionResult:
 
 
 class YoloV8Runner:
+    # Load the packaged detector and turn camera frames into detections.
     def __init__(self, spec_path: Path):
         configure_quiet_output()
         self.spec_path = spec_path
@@ -37,18 +38,18 @@ class YoloV8Runner:
         self.iou_threshold = float(self.spec["postprocessing"].get("iou_threshold", 0.7))
         self.max_detections = int(self.spec["postprocessing"].get("max_detections", 50))
 
-        with suppress_stderr():
-            from executorch.extension.pybindings.portable_lib import _load_for_executorch
+        from executorch.extension.pybindings.portable_lib import _load_for_executorch
 
-            model_path = spec_path.parent / self.spec["pte"]
-            if not model_path.exists():
-                available = ", ".join(path.name for path in sorted(spec_path.parent.glob("*.pte"))) or "none"
-                raise FileNotFoundError(
-                    f"Could not find .pte artifact: {model_path}. "
-                    f"Available .pte files in {spec_path.parent}: {available}. "
-                    "Rerun download_yolov8s_ai_portal_model.py to refresh model_spec.json."
-                )
-            self.model = _load_for_executorch(str(model_path))
+        model_path = spec_path.parent / self.spec["pte"]
+        if not model_path.exists():
+            available = ", ".join(path.name for path in sorted(spec_path.parent.glob("*.pte"))) or "none"
+            raise FileNotFoundError(
+                f"Could not find .pte artifact: {model_path}. "
+                f"Available .pte files in {spec_path.parent}: {available}. "
+                "Rerun download_yolov8s_ai_portal_model.py to refresh model_spec.json."
+            )
+        # ExecuTorch Python runtime binding: load the packaged .pte.
+        self.model = _load_for_executorch(str(model_path))
 
     def detect_frame(
         self,
@@ -57,14 +58,15 @@ class YoloV8Runner:
         confidence_threshold: float | None = None,
         iou_threshold: float | None = None,
     ) -> DetectionResult:
+        # Run the full frame-to-annotated-JPEG application pipeline.
         import cv2
-        with suppress_stderr():
-            import torch
+        import torch
 
         total_start = time.perf_counter()
         input_tensor, scale, pad = self._preprocess(frame_bgr)
 
         start = time.perf_counter()
+        # ExecuTorch Python runtime: invoke the exported forward method.
         with torch.inference_mode(), suppress_stderr():
             raw_output = self.model.forward((input_tensor,))[0]
         inference_ms = (time.perf_counter() - start) * 1000.0
@@ -90,10 +92,10 @@ class YoloV8Runner:
         )
 
     def _preprocess(self, frame_bgr: Any) -> tuple[Any, float, tuple[int, int]]:
+        # Letterbox a BGR frame into the model's square RGB input tensor.
         import cv2
         import numpy as np
-        with suppress_stderr():
-            import torch
+        import torch
 
         image_rgb = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB)
         height, width = image_rgb.shape[:2]
@@ -119,6 +121,7 @@ class YoloV8Runner:
         conf_thres: float,
         iou_thres: float,
     ) -> list[Detection]:
+        # Decode model output, threshold scores, apply NMS, and restore frame coordinates.
         import numpy as np
 
         predictions = output.detach().cpu().numpy()
@@ -145,6 +148,7 @@ class YoloV8Runner:
         class_ids = class_ids[keep]
         selected = nms_by_class(boxes, scores, class_ids, iou_thres)
 
+        # Undo the letterbox padding and scale so boxes align with the camera frame.
         frame_h, frame_w = frame_shape
         pad_x, pad_y = pad
         detections: list[Detection] = []
@@ -174,6 +178,7 @@ def sigmoid(values: Any) -> Any:
 
 
 def xywh_to_xyxy(boxes: Any) -> Any:
+    # Convert center-width-height boxes to corner coordinates.
     result = boxes.copy()
     result[:, 0] = boxes[:, 0] - boxes[:, 2] / 2
     result[:, 1] = boxes[:, 1] - boxes[:, 3] / 2
@@ -183,6 +188,7 @@ def xywh_to_xyxy(boxes: Any) -> Any:
 
 
 def nms_by_class(boxes: Any, scores: Any, class_ids: Any, iou_threshold: float) -> list[int]:
+    # Apply non-maximum suppression independently to each predicted class.
     import numpy as np
 
     keep: list[int] = []
@@ -195,6 +201,7 @@ def nms_by_class(boxes: Any, scores: Any, class_ids: Any, iou_threshold: float) 
 
 
 def nms(boxes: Any, scores: Any, iou_threshold: float) -> Any:
+    # Keep high-scoring boxes while removing strongly overlapping boxes.
     import numpy as np
 
     order = scores.argsort()[::-1]
@@ -210,6 +217,7 @@ def nms(boxes: Any, scores: Any, iou_threshold: float) -> Any:
 
 
 def box_iou(box: Any, boxes: Any) -> Any:
+    # Compute intersection over union between one box and many boxes.
     import numpy as np
 
     x1 = np.maximum(box[0], boxes[:, 0])
@@ -223,6 +231,7 @@ def box_iou(box: Any, boxes: Any) -> Any:
 
 
 def draw_detections(frame_bgr: Any, detections: list[Detection]) -> Any:
+    # Draw class labels and bounding boxes on a camera frame.
     import cv2
 
     for detection in detections:
@@ -249,26 +258,3 @@ def draw_detections(frame_bgr: Any, detections: list[Detection]) -> Any:
 def color_for_label(label: str) -> tuple[int, int, int]:
     palette = [(38, 95, 174), (42, 157, 143), (190, 75, 48), (116, 87, 174), (206, 146, 38)]
     return palette[sum(ord(char) for char in label) % len(palette)]
-
-
-def configure_quiet_output() -> None:
-    os.environ.setdefault("GLOG_minloglevel", "2")
-    os.environ.setdefault("KMP_WARNINGS", "0")
-    os.environ.setdefault("TORCH_CPP_LOG_LEVEL", "ERROR")
-    os.environ.setdefault("PYTHONWARNINGS", "ignore")
-    warnings.filterwarnings("ignore", category=FutureWarning)
-    warnings.filterwarnings("ignore", category=UserWarning, message="The given buffer is not writable.*")
-    logging.getLogger().setLevel(logging.ERROR)
-
-
-@contextmanager
-def suppress_stderr() -> Any:
-    saved_stderr = os.dup(2)
-    devnull = os.open(os.devnull, os.O_WRONLY)
-    try:
-        os.dup2(devnull, 2)
-        yield
-    finally:
-        os.dup2(saved_stderr, 2)
-        os.close(saved_stderr)
-        os.close(devnull)

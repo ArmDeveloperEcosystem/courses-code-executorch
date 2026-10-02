@@ -37,9 +37,10 @@ Treat Modules 0-4 as the course reference.
 Inspect the closest complete workflow before writing code:
 
 - Module 1 for portable and XNNPACK transformer deployment on Edge Linux
-- Module 2 for CNN classification, PTQ, benchmarking, and Python applications
+- Module 2 for CNN classification, PTQ, benchmarking, ETDump and ETRecord
+  inspection, Model Explorer profiling overlays, and Python applications
 - Module 3 for XNNPACK, Android assets, Java tensors, and mobile lifecycle
-- Module 4 for the Arm backend, Ethos-U, TOSA, Vela, FVP, ETDump, and C++
+- Module 4 for the Arm backend, Ethos-U, TOSA, Vela, FVP, and C++
 
 Reuse the architecture and API patterns, not hard-coded model assumptions.
 Trace helpers until the real ExecuTorch calls and generated artifacts are

@@ -27,9 +27,12 @@ void handle_output(
 } // namespace
 
 int main() {
+  // ExecuTorch C++ API: initialize platform services before loading a program.
   executorch::runtime::runtime_init();
   ET_LOG(Info, "ExecuTorch runtime initialized");
 
+  // The runner owns the Program and Method lifecycle; this file supplies the
+  // embedded .pte, input bytes, and application postprocessing callback.
   const executorch::runtime::Error status = app::run_model(
       model_pte,
       sizeof(model_pte),

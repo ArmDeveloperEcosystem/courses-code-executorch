@@ -12,21 +12,21 @@ MODULE1_SCRIPTS = Path(__file__).resolve().parents[1]
 if str(MODULE1_SCRIPTS) not in sys.path:
     sys.path.insert(0, str(MODULE1_SCRIPTS))
 
-from core.opt_chat_core import load_opt_chat_runner
-from _support.web.opt_chat_page import render_page
+from core.gpt2_generation_core import load_gpt2_generation_runner
+from _support.web.gpt2_generation_page import render_page
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Serve a tiny OPT ExecuTorch chat page.")
+    parser = argparse.ArgumentParser(description="Serve a GPT-2 ExecuTorch text-generation page.")
     parser.add_argument("--spec", type=Path, required=True)
     parser.add_argument("--pte", type=Path, required=True)
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8090)
-    parser.add_argument("--max-new-tokens", type=int, default=40)
-    parser.add_argument("--temperature", type=float, default=0.8)
+    parser.add_argument("--max-new-tokens", type=int, default=30)
+    parser.add_argument("--temperature", type=float, default=0.5)
     args = parser.parse_args()
 
-    runner = load_opt_chat_runner(args.spec, args.pte)
+    runner = load_gpt2_generation_runner(args.spec, args.pte)
     startup = dict(runner.startup)
     startup["max_new_tokens"] = args.max_new_tokens
 
@@ -61,8 +61,13 @@ def main() -> None:
             self.wfile.write(body.encode("utf-8"))
 
     server = ThreadingHTTPServer((args.host, args.port), Handler)
-    print(f"Serving OPT demo at http://{args.host}:{args.port}")
-    server.serve_forever()
+    print(f"Serving GPT-2 demo at http://{args.host}:{args.port}")
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        print("\nStopping server...")
+    finally:
+        server.server_close()
 
 
 if __name__ == "__main__":

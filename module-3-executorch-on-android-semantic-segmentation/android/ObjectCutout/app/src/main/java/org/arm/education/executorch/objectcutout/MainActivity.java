@@ -22,7 +22,6 @@ import android.widget.TextView;
 import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Locale;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -114,7 +113,7 @@ public final class MainActivity extends Activity {
         header.setElevation(dp(3));
 
         TextView chip = new TextView(this);
-        chip.setText("On-device AI");
+        chip.setText(R.string.chip_on_device_ai);
         chip.setTextSize(12);
         chip.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
         chip.setTextColor(Color.rgb(101, 44, 28));
@@ -123,7 +122,7 @@ public final class MainActivity extends Activity {
         header.addView(chip);
 
         TextView title = new TextView(this);
-        title.setText("Cutout Studio");
+        title.setText(R.string.title_cutout_studio);
         title.setTextSize(30);
         title.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
         title.setTextColor(Color.rgb(16, 24, 40));
@@ -133,7 +132,7 @@ public final class MainActivity extends Activity {
         header.addView(title);
 
         TextView subtitle = new TextView(this);
-        subtitle.setText("Remove backgrounds for clean social posts");
+        subtitle.setText(R.string.subtitle_remove_backgrounds);
         subtitle.setTextColor(Color.rgb(52, 64, 84));
         subtitle.setTextSize(14);
         subtitle.setLineSpacing(0, 1.05f);
@@ -152,7 +151,7 @@ public final class MainActivity extends Activity {
         buttons.setGravity(Gravity.CENTER_VERTICAL);
 
         Button pickButton = new Button(this);
-        pickButton.setText("Choose image");
+        pickButton.setText(R.string.action_choose_image);
         pickButton.setAllCaps(false);
         pickButton.setTextColor(Color.rgb(132, 45, 24));
         pickButton.setBackground(roundedStroke(
@@ -165,7 +164,7 @@ public final class MainActivity extends Activity {
         buttons.addView(pickButton, new LinearLayout.LayoutParams(0, dp(48), 1));
 
         runButton = new Button(this);
-        runButton.setText("Remove background");
+        runButton.setText(R.string.action_remove_background);
         runButton.setAllCaps(false);
         setRunButtonEnabled(false);
         runButton.setOnClickListener(v -> runCutout());
@@ -183,14 +182,14 @@ public final class MainActivity extends Activity {
         content.addView(outputControls, outputParams);
 
         status = new TextView(this);
-        status.setText("Loading model...");
+        status.setText(R.string.status_loading_model);
         status.setTextColor(Color.rgb(155, 56, 34));
         status.setTextSize(14);
         status.setPadding(0, dp(18), 0, dp(8));
         content.addView(status);
 
         timing = new TextView(this);
-        timing.setText("Preprocess: -   Forward: -   Postprocess: -   Total: -");
+        timing.setText(R.string.timing_pending);
         timing.setTextColor(Color.rgb(91, 103, 121));
         timing.setTextSize(13);
         timing.setPadding(0, 0, 0, dp(12));
@@ -199,18 +198,18 @@ public final class MainActivity extends Activity {
         LinearLayout images = new LinearLayout(this);
         images.setOrientation(LinearLayout.VERTICAL);
 
-        originalView = imageView("Original");
+        originalView = imageView(getString(R.string.description_original));
         images.addView(imageCard(
-                "Source image",
-                "Pick a photo with one clear supported subject.",
+                getString(R.string.heading_source_image),
+                getString(R.string.caption_source_image),
                 originalView
         ));
 
-        cutoutView = imageView("Cutout");
+        cutoutView = imageView(getString(R.string.description_cutout));
         cutoutView.setBackground(new CheckerboardDrawable(dp(18)));
         View postPreviewCard = imageCard(
-                "Post preview",
-                "Checkerboard shows the transparent background.",
+                getString(R.string.heading_post_preview),
+                getString(R.string.caption_post_preview),
                 cutoutView
         );
         LinearLayout.LayoutParams cutoutParams = new LinearLayout.LayoutParams(
@@ -244,8 +243,8 @@ public final class MainActivity extends Activity {
         LinearLayout modeRow = new LinearLayout(this);
         modeRow.setOrientation(LinearLayout.HORIZONTAL);
 
-        cutoutModeButton = modeButton("Cutout", DisplayMode.CUTOUT);
-        highlightModeButton = modeButton("Highlight", DisplayMode.HIGHLIGHT);
+        cutoutModeButton = modeButton(getString(R.string.mode_cutout), DisplayMode.CUTOUT);
+        highlightModeButton = modeButton(getString(R.string.mode_highlight), DisplayMode.HIGHLIGHT);
         modeRow.addView(cutoutModeButton, new LinearLayout.LayoutParams(0, dp(42), 1));
         LinearLayout.LayoutParams highlightParams = new LinearLayout.LayoutParams(0, dp(42), 1);
         highlightParams.setMargins(dp(10), 0, 0, 0);
@@ -264,7 +263,7 @@ public final class MainActivity extends Activity {
 
         for (int color : HIGHLIGHT_COLORS) {
             View swatch = new View(this);
-            swatch.setContentDescription("Highlight color");
+            swatch.setContentDescription(getString(R.string.description_highlight_color));
             swatch.setOnClickListener(v -> {
                 highlightColor = color;
                 setDisplayMode(DisplayMode.HIGHLIGHT);
@@ -414,11 +413,14 @@ public final class MainActivity extends Activity {
                 }
                 segmenter = loadedSegmenter;
                 runOnUiThread(() -> {
-                    status.setText("Model ready. Choose an image with a clear supported subject.");
+                    status.setText(R.string.status_model_ready);
                     setRunButtonEnabled(selectedBitmap != null);
                 });
             } catch (Throwable exc) {
-                runOnUiThread(() -> status.setText("Could not load model assets: " + describe(exc)));
+                runOnUiThread(() -> status.setText(getString(
+                        R.string.status_model_load_failed,
+                        describe(exc)
+                )));
             }
         });
     }
@@ -445,10 +447,10 @@ public final class MainActivity extends Activity {
             lastResult = null;
             originalView.setImageBitmap(selectedBitmap);
             cutoutView.setImageDrawable(new CheckerboardDrawable(dp(18)));
-            status.setText("Image ready. Remove the background to create a post asset.");
+            status.setText(R.string.status_image_ready);
             setRunButtonEnabled(segmenter != null);
         } catch (Throwable exc) {
-            status.setText("Could not open image: " + describe(exc));
+            status.setText(getString(R.string.status_image_open_failed, describe(exc)));
         }
     }
 
@@ -457,7 +459,7 @@ public final class MainActivity extends Activity {
             return;
         }
         setRunButtonEnabled(false);
-        status.setText("Creating cutout with ExecuTorch...");
+        status.setText(R.string.status_creating_cutout);
         executor.execute(() -> {
             try {
                 CutoutResult result = segmenter.cutout(selectedBitmap);
@@ -465,18 +467,16 @@ public final class MainActivity extends Activity {
                     lastResult = result;
                     displayLastResult();
                     if (result.foregroundPixels == 0) {
-                        status.setText("No supported foreground object found. Try a clearer person, cat, dog, car, or similar VOC class.");
+                        status.setText(R.string.status_no_foreground);
                     } else {
-                        status.setText(String.format(
-                                Locale.US,
-                                "Post asset ready. Detected: %s (%.1f%% of image). Use Cutout or Highlight.",
+                        status.setText(getString(
+                                R.string.status_post_asset_ready,
                                 result.label,
                                 result.foregroundFraction * 100.0f
                         ));
                     }
-                    timing.setText(String.format(
-                            Locale.US,
-                            "Preprocess: %d ms   Forward: %d ms   Postprocess: %d ms   Total: %d ms",
+                    timing.setText(getString(
+                            R.string.timing_result,
                             result.preprocessMs,
                             result.forwardMs,
                             result.postprocessMs,
@@ -486,7 +486,7 @@ public final class MainActivity extends Activity {
                 });
             } catch (Throwable exc) {
                 runOnUiThread(() -> {
-                    status.setText("Cutout failed: " + describe(exc));
+                    status.setText(getString(R.string.status_cutout_failed, describe(exc)));
                     setRunButtonEnabled(true);
                 });
             }
