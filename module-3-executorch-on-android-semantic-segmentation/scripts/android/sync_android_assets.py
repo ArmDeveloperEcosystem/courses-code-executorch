@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# Copy one validated .pte and its model contract into Android assets.
+
 from __future__ import annotations
 
 import argparse
@@ -7,6 +9,7 @@ from pathlib import Path
 
 
 def main() -> None:
+    # Package the selected model under the stable filename used by the app.
     parser = argparse.ArgumentParser(description="Copy Module 3 ExecuTorch artifacts into Android assets.")
     parser.add_argument("--artifact-dir", type=Path, default=Path("module-3-executorch-on-android-semantic-segmentation/artifacts/lraspp_mobilenetv3"))
     parser.add_argument("--android-assets", type=Path, default=Path("module-3-executorch-on-android-semantic-segmentation/android/ObjectCutout/app/src/main/assets"))
@@ -23,6 +26,8 @@ def main() -> None:
     args = parser.parse_args()
 
     args.android_assets.mkdir(parents=True, exist_ok=True)
+    # The source artifact may be FP32 or INT8, but Android always loads the
+    # stable asset name supplied by --asset-pte-name.
     copies = [
         (args.artifact_dir / args.pte_name, args.android_assets / args.asset_pte_name),
         (args.artifact_dir / "model_spec.json", args.android_assets / "model_spec.json"),

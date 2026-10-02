@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# Benchmark MobileNetV2 with PyTorch, FP32 XNNPACK, or INT8 XNNPACK.
+
 from __future__ import annotations
 
 import argparse
@@ -15,11 +17,12 @@ if str(REPO_ROOT) not in sys.path:
 if str(MODULE2_SCRIPTS) not in sys.path:
     sys.path.insert(0, str(MODULE2_SCRIPTS))
 
-from _support.common import configure_quiet_output, load_executorch_program, suppress_stderr
+from _support.common import configure_quiet_output, load_executorch_program
 from course_support.benchmarking import benchmark, print_stats, save_plots, write_results
 
 
 def main() -> None:
+    # Script setup: command-line options, model settings, and output paths.
     parser = argparse.ArgumentParser(description="Benchmark MobileNetV2 with PyTorch or ExecuTorch.")
     parser.add_argument("--runtime", choices=["pytorch", "executorch"], required=True)
     parser.add_argument("--backend", choices=["xnnpack", "int8_xnnpack"], default=None)
@@ -34,8 +37,7 @@ def main() -> None:
 
     configure_quiet_output()
 
-    with suppress_stderr():
-        import torch
+    import torch
 
     spec = json.loads(args.spec.read_text())
     image = args.image or resolve_sample_image(args.spec, spec)
@@ -61,21 +63,25 @@ def main() -> None:
         module = load_pytorch_model(args.spec, spec)
 
         def forward() -> Any:
-            with torch.inference_mode(), suppress_stderr():
+            with torch.inference_mode():
+                # PyTorch eager baseline: call the nn.Module directly.
                 return module(input_tensor)
 
     else:
         if args.pte is None:
             raise ValueError("--pte is required for --runtime executorch")
-        with suppress_stderr():
-            module = load_executorch_program(args.pte)
+        # ExecuTorch Python runtime binding: load the packaged .pte.
+        module = load_executorch_program(args.pte)
 
         def forward() -> Any:
-            with torch.inference_mode(), suppress_stderr():
+            with torch.inference_mode():
+                # ExecuTorch runtime: invoke the exported forward method.
                 return module.forward((input_tensor,))[0]
 
     output = forward()
     predictions = topk_predictions(output, labels)
+    # The shared benchmark helper suppresses repeated native output only while
+    # timing each forward call.
     times_ms, stats = benchmark(forward, warmups=args.warmups, runs=args.runs)
     plot_dir = args.plots or args.out.parent / "plots"
     plot_paths = save_plots(times_ms, title=result_name, out_dir=plot_dir)
@@ -104,6 +110,7 @@ def main() -> None:
 
 
 def load_pytorch_model(spec_path: Path, spec: dict[str, Any]) -> Any:
+    # Reconstruct the eager baseline from the saved state dictionary.
     import torch
     from torchvision import models
 
@@ -118,6 +125,7 @@ def resolve_sample_image(spec_path: Path, spec: dict[str, Any]) -> Path | None:
 
 
 def preprocess_image(path: Path, spec: dict[str, Any]) -> Any:
+    # Apply the resize, crop, and normalization recorded in model_spec.json.
     from PIL import Image
     import torchvision.transforms as transforms
 
@@ -134,6 +142,7 @@ def preprocess_image(path: Path, spec: dict[str, Any]) -> Any:
 
 
 def topk_predictions(output: Any, labels: list[str], *, k: int = 5) -> list[dict[str, float | str]]:
+    # Convert classifier logits into labelled top-k probabilities.
     import torch
 
     probabilities = torch.nn.functional.softmax(output[0], dim=0)
@@ -148,6 +157,7 @@ def topk_predictions(output: Any, labels: list[str], *, k: int = 5) -> list[dict
 
 
 def infer_backend(pte: Path | None, out: Path) -> str:
+    # Infer a result label from artifact names when --backend is omitted.
     for path in (pte, out):
         if path is None:
             continue

@@ -26,6 +26,7 @@ module-*/**/results/*
 !module-*/**/results/.gitkeep
 
 # Generated model data, downloads, datasets, exports, and lowering artifacts
+datasets/
 module_*/**/artifacts/
 module-*/**/artifacts/
 

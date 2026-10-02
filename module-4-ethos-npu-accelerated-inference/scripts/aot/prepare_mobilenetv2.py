@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
+# Prepare MobileNetV2 weights, labels, sample image, and model contract.
+
 from __future__ import annotations
 
 import argparse
-from contextlib import contextmanager
 import hashlib
 import json
 import logging
 import os
 from pathlib import Path
-from typing import Any
 from urllib.request import Request, urlopen
 import warnings
 
@@ -19,15 +19,15 @@ SAMPLE_SOURCE_PAGE = "https://commons.wikimedia.org/wiki/File:Labrador_Retriever
 
 
 def main() -> None:
+    # Script setup: command-line options and output paths.
     parser = argparse.ArgumentParser(description="Prepare MobileNetV2 artifacts for the Ethos-U lab.")
     parser.add_argument("--out", type=Path, default=Path("module-4-ethos-npu-accelerated-inference/artifacts/mobilenetv2"))
     args = parser.parse_args()
 
     configure_quiet_output()
 
-    with suppress_stderr():
-        import torch
-        from torchvision.models import MobileNet_V2_Weights, mobilenet_v2
+    import torch
+    from torchvision.models import MobileNet_V2_Weights, mobilenet_v2
 
     args.out.mkdir(parents=True, exist_ok=True)
     weights_path = args.out / "mobilenet_v2.pth"
@@ -35,18 +35,28 @@ def main() -> None:
     sample_path = args.out / "sample.jpg"
     spec_path = args.out / "model_spec.json"
 
+    # TorchVision API: load the pinned pretrained weights and their label order.
     print("Loading TorchVision MobileNetV2 weights...")
-    with suppress_stderr():
-        weights = MobileNet_V2_Weights.IMAGENET1K_V1
-        model = mobilenet_v2(weights=weights).eval()
-        torch.save(model.state_dict(), weights_path)
+    weights = MobileNet_V2_Weights.IMAGENET1K_V1
+    model = mobilenet_v2(weights=weights).eval()
+    torch.save(model.state_dict(), weights_path)
 
     labels_path.write_text(json.dumps(weights.meta["categories"], indent=2) + "\n")
     sample_sha256 = download_sample(SAMPLE_URL, sample_path, SAMPLE_SHA256)
 
+    # Record the tensor shape and preprocessing used by AOT and FVP scripts.
     spec = {
         "name": "mobilenetv2",
         "weights_variant": "IMAGENET1K_V1",
+        "model_source": {
+            "provider": "TorchVision",
+            "documentation": "https://docs.pytorch.org/vision/main/models/generated/torchvision.models.mobilenet_v2.html",
+            "weights_variant": "IMAGENET1K_V1",
+            "source_code_license": "BSD-3-Clause",
+            "source_code_license_url": "https://github.com/pytorch/vision/blob/main/LICENSE",
+            "training_dataset": "ImageNet-1K",
+            "training_dataset_terms": "https://image-net.org/accessagreement",
+        },
         "weights": weights_path.name,
         "labels": labels_path.name,
         "sample_image": sample_path.name if sample_path.exists() else None,
@@ -57,7 +67,7 @@ def main() -> None:
             "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
             "source_page": SAMPLE_SOURCE_PAGE,
             "source": "Wikimedia Commons",
-            "author": "Chiemsee2024",
+            "author": "Chiemsee2016",
             "sha256": sample_sha256,
         }
         if sample_path.exists()
@@ -84,6 +94,7 @@ def main() -> None:
 
 
 def download_sample(url: str, path: Path, expected_sha256: str) -> str:
+    # Download the sample once and reject content that does not match its hash.
     if path.exists():
         current_sha256 = file_sha256(path)
         if current_sha256 == expected_sha256:
@@ -103,6 +114,7 @@ def download_sample(url: str, path: Path, expected_sha256: str) -> str:
 
 
 def file_sha256(path: Path) -> str:
+    # Hash a file in chunks so large artifacts do not need to fit in memory.
     digest = hashlib.sha256()
     with path.open("rb") as file:
         for chunk in iter(lambda: file.read(1024 * 1024), b""):
@@ -111,25 +123,12 @@ def file_sha256(path: Path) -> str:
 
 
 def configure_quiet_output() -> None:
+    # Supporting setup: filter known dependency warnings without hiding errors.
     os.environ.setdefault("PYTHONWARNINGS", "ignore")
     warnings.filterwarnings("ignore", category=FutureWarning)
     logging.getLogger().setLevel(logging.ERROR)
     for name in ("torch", "torchvision"):
         logging.getLogger(name).setLevel(logging.ERROR)
-
-
-@contextmanager
-def suppress_stderr() -> Any:
-    saved_stderr = os.dup(2)
-    devnull = os.open(os.devnull, os.O_WRONLY)
-    try:
-        os.dup2(devnull, 2)
-        yield
-    finally:
-        os.dup2(saved_stderr, 2)
-        os.close(saved_stderr)
-        os.close(devnull)
-
 
 if __name__ == "__main__":
     main()

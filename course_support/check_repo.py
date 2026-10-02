@@ -11,7 +11,6 @@ from urllib.parse import unquote
 
 ROOT = Path(__file__).resolve().parents[1]
 COURSE_MODULES = {
-    0: ROOT / "module-0-course-executorch-intro",
     1: ROOT / "module-1-transformer-inference-with-xnnpack",
     2: ROOT / "module-2-cnn-inference-with-quantization",
     3: ROOT / "module-3-executorch-on-android-semantic-segmentation",
@@ -28,7 +27,6 @@ MARKDOWN_FILES = [
     ROOT / ".agents/course-context.md",
     ROOT / ".agents/skills/explain-mode/SKILL.md",
     ROOT / ".agents/skills/build-mode/SKILL.md",
-    COURSE_MODULES[0] / "module_0.md",
     COURSE_MODULES[4] / "apps/ethosu_cpp_reference/README.md",
 ]
 LINK_PATTERN = re.compile(r"!?\[[^\]]*\]\(([^)]+)\)")

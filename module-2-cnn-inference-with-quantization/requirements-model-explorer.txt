@@ -1,0 +1,4 @@
+# Optional Module 2 Model Explorer tooling, tested with Python 3.12.14.
+# Install into the Module 2 virtual environment.
+ai-edge-model-explorer==0.1.32
+pte-adapter-model-explorer==0.1.2

@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# Convert an image into the raw input tensor consumed by the FVP runner.
+
 from __future__ import annotations
 
 import argparse
@@ -8,6 +10,7 @@ from typing import Any
 
 
 def main() -> None:
+    # Apply the model contract and write contiguous NCHW float32 bytes.
     parser = argparse.ArgumentParser(description="Create a raw MobileNetV2 input tensor for the FVP runner.")
     parser.add_argument("--spec", type=Path, default=Path("module-4-ethos-npu-accelerated-inference/artifacts/mobilenetv2/model_spec.json"))
     parser.add_argument("--image", type=Path, default=None)
@@ -50,6 +53,7 @@ def main() -> None:
 
 
 def preprocess_image(path: Path, spec: dict[str, Any]) -> Any:
+    # Apply the resize, crop, and normalization recorded in model_spec.json.
     from PIL import Image
     import torchvision.transforms as transforms
 

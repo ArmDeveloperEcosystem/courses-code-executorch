@@ -1,3 +1,5 @@
+# ExecuTorch next-token generation used by the Module 1 GPT-2 web demo.
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -16,7 +18,7 @@ from _support.common import configure_quiet_output, load_executorch_program, sup
 
 
 @dataclass(frozen=True)
-class OptChatMetrics:
+class Gpt2GenerationMetrics:
     prompt_tokens: int
     generated_tokens: int
     first_token_ms: float
@@ -38,19 +40,21 @@ class OptChatMetrics:
 
 
 @dataclass(frozen=True)
-class OptChatResult:
+class Gpt2GenerationResult:
     output: str
-    metrics: OptChatMetrics
+    metrics: Gpt2GenerationMetrics
 
 
 @dataclass
-class OptChatRunner:
+class Gpt2GenerationRunner:
+    # Run a fixed-context GPT-2 .pte repeatedly to generate text.
     spec: dict[str, Any]
     tokenizer: Any
     model: Any
     startup: dict[str, str | float | int]
 
-    def generate(self, prompt: str, *, max_new_tokens: int, temperature: float = 0.8) -> OptChatResult:
+    def generate(self, prompt: str, *, max_new_tokens: int, temperature: float = 0.5) -> Gpt2GenerationResult:
+        # Generate tokens and record forward-pass and end-to-end timing.
         import torch
 
         started = time.perf_counter()
@@ -70,10 +74,11 @@ class OptChatRunner:
             if in_ids.shape[1] < ctx:
                 pad = ctx - in_ids.shape[1]
                 pad_ids = torch.full((1, pad), int(self.tokenizer.pad_token_id), dtype=in_ids.dtype)
-                in_ids = torch.cat([pad_ids, in_ids], dim=1)
-                in_mask = torch.cat([torch.zeros((1, pad), dtype=in_mask.dtype), in_mask], dim=1)
+                in_ids = torch.cat([in_ids, pad_ids], dim=1)
+                in_mask = torch.cat([in_mask, torch.zeros((1, pad), dtype=in_mask.dtype)], dim=1)
 
             step_started = time.perf_counter()
+            # ExecuTorch Python runtime: invoke the exported forward method.
             with suppress_stderr():
                 logits = self.model.forward((in_ids, in_mask))[0]
             forward_ms_total += (time.perf_counter() - step_started) * 1000.0
@@ -85,11 +90,13 @@ class OptChatRunner:
 
             if first_token_ms == 0.0:
                 first_token_ms = (time.perf_counter() - started) * 1000.0
+            if int(next_token.item()) == int(self.tokenizer.eos_token_id):
+                break
 
         total_ms = (time.perf_counter() - started) * 1000.0
-        return OptChatResult(
+        return Gpt2GenerationResult(
             output=self.tokenizer.decode(input_ids[0], skip_special_tokens=True),
-            metrics=OptChatMetrics(
+            metrics=Gpt2GenerationMetrics(
                 prompt_tokens=prompt_tokens,
                 generated_tokens=generated_tokens,
                 first_token_ms=first_token_ms,
@@ -101,19 +108,19 @@ class OptChatRunner:
         )
 
 
-def load_opt_chat_runner(spec_path: Path, pte_path: Path) -> OptChatRunner:
+def load_gpt2_generation_runner(spec_path: Path, pte_path: Path) -> Gpt2GenerationRunner:
+    # Load the tokenizer, model settings, and .pte program once at startup.
     configure_quiet_output(include_transformers=True)
 
-    with suppress_stderr():
-        from transformers import AutoTokenizer
+    from transformers import AutoTokenizer
 
     load_started = time.perf_counter()
     spec = json.loads(spec_path.read_text())
-    with suppress_stderr():
-        tokenizer = AutoTokenizer.from_pretrained(spec["model_id"])
-        if tokenizer.pad_token is None:
-            tokenizer.pad_token = tokenizer.eos_token
-        model = load_executorch_program(pte_path)
+    tokenizer = AutoTokenizer.from_pretrained(spec["model_id"])
+    if tokenizer.pad_token is None:
+        tokenizer.pad_token = tokenizer.eos_token
+    tokenizer.padding_side = "right"
+    model = load_executorch_program(pte_path)
 
     startup = {
         "model": spec["model_id"],
@@ -121,4 +128,4 @@ def load_opt_chat_runner(spec_path: Path, pte_path: Path) -> OptChatRunner:
         "seq_len": int(spec["seq_len"]),
         "load_ms": (time.perf_counter() - load_started) * 1000.0,
     }
-    return OptChatRunner(spec=spec, tokenizer=tokenizer, model=model, startup=startup)
+    return Gpt2GenerationRunner(spec=spec, tokenizer=tokenizer, model=model, startup=startup)

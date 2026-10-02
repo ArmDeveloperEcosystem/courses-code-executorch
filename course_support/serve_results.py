@@ -39,14 +39,18 @@ def main() -> None:
 
     server = ThreadingHTTPServer((args.host, args.port), Handler)
     print(f"Serving results from {results_dir} at http://{args.host}:{args.port}")
-    server.serve_forever()
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        print("\nStopping server...")
+    finally:
+        server.server_close()
 
 
 def render_dashboard(results_dir: Path) -> str:
     results_dir = results_dir.expanduser().resolve()
     entries = []
     for path in sorted(results_dir.glob("*.json")):
-        payload = json.loads(path.read_text())
         entries.append(read_result(path))
 
     entries.sort(key=entry_sort_key)

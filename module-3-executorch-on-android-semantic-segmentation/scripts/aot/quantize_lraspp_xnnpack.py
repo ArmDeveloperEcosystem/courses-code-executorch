@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# Calibrate LR-ASPP, convert it to INT8, and lower it to XNNPACK.
+
 from __future__ import annotations
 
 import argparse
@@ -9,13 +11,14 @@ import logging
 import os
 from pathlib import Path
 import sys
-from typing import Any
+from typing import Any, Iterator
 import warnings
 
 from segmentation_preprocessing import preprocess_tensor
 
 
 def main() -> None:
+    # Script setup: command-line options, paths, and known dependency warnings.
     parser = argparse.ArgumentParser(description="Quantize LR-ASPP MobileNetV3 with PT2E and lower to XNNPACK.")
     parser.add_argument("--spec", type=Path, default=Path("module-3-executorch-on-android-semantic-segmentation/artifacts/lraspp_mobilenetv3/model_spec.json"))
     parser.add_argument(
@@ -30,19 +33,18 @@ def main() -> None:
 
     configure_quiet_output()
 
-    with suppress_stderr():
-        import torch
-        import torchvision.datasets as datasets
-        from executorch.backends.xnnpack.partition.xnnpack_partitioner import XnnpackPartitioner
-        from executorch.backends.xnnpack.quantizer.xnnpack_quantizer import (
-            get_symmetric_quantization_config,
-            XNNPACKQuantizer,
-        )
-        from executorch.exir import EdgeCompileConfig, to_edge_transform_and_lower
-        from torch.export import export
-        from torchao.quantization.pt2e import move_exported_model_to_eval
-        from torchao.quantization.pt2e.quantize_pt2e import convert_pt2e, prepare_pt2e
-        from torchvision.models.segmentation import lraspp_mobilenet_v3_large
+    import torch
+    import torchvision.datasets as datasets
+    from executorch.backends.xnnpack.partition.xnnpack_partitioner import XnnpackPartitioner
+    from executorch.backends.xnnpack.quantizer.xnnpack_quantizer import (
+        get_symmetric_quantization_config,
+        XNNPACKQuantizer,
+    )
+    from executorch.exir import EdgeCompileConfig, to_edge_transform_and_lower
+    from torch.export import export
+    from torchao.quantization.pt2e import move_exported_model_to_eval
+    from torchao.quantization.pt2e.quantize_pt2e import convert_pt2e, prepare_pt2e
+    from torchvision.models.segmentation import lraspp_mobilenet_v3_large
 
     spec = json.loads(args.spec.read_text())
     artifact_dir = args.spec.parent
@@ -54,25 +56,27 @@ def main() -> None:
             "Run create_segmentation_calibration_images.py first."
         )
 
+    # 1. Rebuild the PyTorch model and expose its logits tensor as one output.
     labels = json.loads((artifact_dir / spec["labels"]).read_text())
-    with suppress_stderr():
-        base_model = lraspp_mobilenet_v3_large(
-            weights=None,
-            weights_backbone=None,
-            num_classes=len(labels),
-        )
-        base_model.load_state_dict(torch.load(artifact_dir / spec["weights"], map_location="cpu"))
-        model = SegmentationLogits(base_model).eval()
+    base_model = lraspp_mobilenet_v3_large(
+        weights=None,
+        weights_backbone=None,
+        num_classes=len(labels),
+    )
+    base_model.load_state_dict(torch.load(artifact_dir / spec["weights"], map_location="cpu"))
+    model = SegmentationLogits(base_model).eval()
 
     example_inputs = (torch.randn(*spec["input"]["shape"]),)
+
+    # 2. ExecuTorch XNNPACK API: describe how PT2E should quantize the graph.
     quantizer = XNNPACKQuantizer()
     quantizer.set_global(get_symmetric_quantization_config(is_per_channel=True))
 
     print("Exporting and preparing LR-ASPP for PT2E quantization")
-    with suppress_stderr():
-        exported = export(model, example_inputs)
-        prepared = prepare_pt2e(exported.module(), quantizer)
-        move_exported_model_to_eval(prepared)
+    # 3. PyTorch export and PT2E APIs: capture the model and insert observers.
+    exported = export(model, example_inputs)
+    prepared = prepare_pt2e(exported.module(), quantizer)
+    move_exported_model_to_eval(prepared)
 
     calibration_loader = torch.utils.data.DataLoader(
         datasets.ImageFolder(args.calibration_images, transform=image_transform(spec)),
@@ -86,20 +90,26 @@ def main() -> None:
         for index, (image, _label) in enumerate(calibration_loader):
             if index >= args.num_calib:
                 break
+            # Native libraries can repeat the same message for every image.
             with suppress_stderr():
                 prepared(image)
 
     print("Converting to INT8 and lowering with XNNPACK")
+    # 4. PT2E API: replace the calibrated observers with quantized operations.
     quantized_model = convert_pt2e(prepared)
     exported_quantized = export(quantized_model, example_inputs)
+
+    # 5. ExecuTorch APIs: delegate supported regions, then package the .pte.
     edge = to_edge_transform_and_lower(
         exported_quantized,
         partitioner=[XnnpackPartitioner()],
         compile_config=EdgeCompileConfig(_check_ir_validity=False),
     )
     program = edge.to_executorch()
+    # Course wrapper: write_pte() handles ExecuTorch version-specific serialization.
     write_pte(program, out)
 
+    # Supporting output: record artifact sizes and delegation for later comparison.
     fp32_pte = artifact_dir / "lraspp_mobilenetv3_xnnpack.pte"
     metadata = {
         "model": spec["name"],
@@ -108,8 +118,8 @@ def main() -> None:
         "pte": str(out),
         "pte_size_mb": out.stat().st_size / 1_000_000.0,
         "fp32_pte_size_mb": fp32_pte.stat().st_size / 1_000_000.0 if fp32_pte.exists() else None,
-        "num_calib": min(args.num_calib, len(calibration_loader.dataset)),
         "calibration_images": str(args.calibration_images),
+        "num_calib": min(args.num_calib, len(calibration_loader.dataset)),
         "delegation": inspect_delegation(edge),
     }
     metadata_path = out.with_suffix(".json")
@@ -124,7 +134,7 @@ def main() -> None:
 
 
 class SegmentationLogits:
-    """Thin wrapper so the exported program returns only the segmentation logits tensor."""
+    # TorchVision returns a dictionary; the Android app expects one tensor.
 
     def __init__(self, model: Any):
         import torch
@@ -144,10 +154,12 @@ class SegmentationLogits:
 
 
 def image_transform(spec: dict[str, Any]) -> Any:
+    # Use the same resize, padding, and normalization as the Android app.
     return lambda image: preprocess_tensor(image, spec)
 
 
 def inspect_delegation(edge: Any) -> dict[str, Any]:
+    # Count XNNPACK regions and operators left on the portable path.
     import torch
 
     graph = edge.exported_program().graph_module.graph
@@ -181,6 +193,7 @@ def print_delegation(summary: dict[str, Any], *, max_ops: int = 30) -> None:
 
 
 def write_pte(program: Any, path: Path) -> None:
+    # Course wrapper around the serialization APIs in the pinned ExecuTorch version.
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("wb") as f:
         if hasattr(program, "write_to_file"):
@@ -190,6 +203,7 @@ def write_pte(program: Any, path: Path) -> None:
 
 
 def configure_quiet_output() -> None:
+    # Supporting setup: filter known warnings without hiding export failures.
     ensure_interpreter_bin_on_path()
     os.environ.setdefault("GLOG_minloglevel", "2")
     os.environ.setdefault("TORCH_CPP_LOG_LEVEL", "ERROR")
@@ -220,7 +234,13 @@ def ensure_interpreter_bin_on_path() -> None:
 
 
 @contextmanager
-def suppress_stderr() -> Any:
+def suppress_stderr() -> Iterator[None]:
+    # Used only in repeated calibration loops where native output would appear
+    # once per image. Python tracebacks are printed after stderr is restored.
+    # Set COURSE_DEBUG=1 to keep native diagnostics visible.
+    if os.environ.get("COURSE_DEBUG") == "1":
+        yield
+        return
     saved_stderr = os.dup(2)
     devnull = os.open(os.devnull, os.O_WRONLY)
     try:

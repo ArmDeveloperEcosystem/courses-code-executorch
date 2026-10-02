@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# Calibrate MobileNetV2, convert it to INT8, and lower it to XNNPACK.
+
 from __future__ import annotations
 
 import argparse
@@ -9,11 +11,12 @@ import logging
 import os
 from pathlib import Path
 import sys
-from typing import Any
+from typing import Any, Iterator
 import warnings
 
 
 def main() -> None:
+    # Script setup: command-line options, paths, and known dependency warnings.
     parser = argparse.ArgumentParser(description="Quantize MobileNetV2 with PT2E and lower to XNNPACK.")
     parser.add_argument("--spec", type=Path, default=Path("module-2-cnn-inference-with-quantization/artifacts/mobilenetv2/model_spec.json"))
     parser.add_argument(
@@ -23,25 +26,24 @@ def main() -> None:
         help="ImageFolder directory used for PTQ calibration.",
     )
     parser.add_argument("--out", type=Path, default=None, help="Output INT8 .pte path.")
-    parser.add_argument("--num-calib", type=int, default=16)
+    parser.add_argument("--num-calib", type=int, default=100)
     parser.add_argument("--quantize-classifier-head", action="store_true")
     args = parser.parse_args()
 
     configure_quiet_output()
 
-    with suppress_stderr():
-        import torch
-        import torchvision.datasets as datasets
-        import torchvision.models as models
-        from executorch.backends.xnnpack.partition.xnnpack_partitioner import XnnpackPartitioner
-        from executorch.backends.xnnpack.quantizer.xnnpack_quantizer import (
-            get_symmetric_quantization_config,
-            XNNPACKQuantizer,
-        )
-        from executorch.exir import EdgeCompileConfig, to_edge_transform_and_lower
-        from torch.export import export
-        from torchao.quantization.pt2e import move_exported_model_to_eval
-        from torchao.quantization.pt2e.quantize_pt2e import convert_pt2e, prepare_pt2e
+    import torch
+    import torchvision.datasets as datasets
+    import torchvision.models as models
+    from executorch.backends.xnnpack.partition.xnnpack_partitioner import XnnpackPartitioner
+    from executorch.backends.xnnpack.quantizer.xnnpack_quantizer import (
+        get_symmetric_quantization_config,
+        XNNPACKQuantizer,
+    )
+    from executorch.exir import EdgeCompileConfig, to_edge_transform_and_lower
+    from torch.export import export
+    from torchao.quantization.pt2e import move_exported_model_to_eval
+    from torchao.quantization.pt2e.quantize_pt2e import convert_pt2e, prepare_pt2e
 
     spec = json.loads(args.spec.read_text())
     artifact_dir = args.spec.parent
@@ -54,21 +56,23 @@ def main() -> None:
             "Run create_calibration_images.py first."
         )
 
-    with suppress_stderr():
-        model = models.mobilenet_v2(weights=None)
-        model.load_state_dict(torch.load(weights_path, map_location="cpu"))
-        model.eval()
+    # 1. Rebuild the PyTorch model and create an input with the deployed shape.
+    model = models.mobilenet_v2(weights=None)
+    model.load_state_dict(torch.load(weights_path, map_location="cpu"))
+    model.eval()
 
     example_inputs = (torch.randn(*spec["input"]["shape"]),)
+
+    # 2. ExecuTorch XNNPACK API: describe how PT2E should quantize the graph.
     quantizer = XNNPACKQuantizer()
     quantizer.set_global(get_symmetric_quantization_config(is_per_channel=True))
     if not args.quantize_classifier_head:
         quantizer.set_filter_function(skip_classifier_head)
 
-    with suppress_stderr():
-        exported = export(model, example_inputs)
-        prepared = prepare_pt2e(exported.module(), quantizer)
-        move_exported_model_to_eval(prepared)
+    # 3. PyTorch export and PT2E APIs: capture the model and insert observers.
+    exported = export(model, example_inputs)
+    prepared = prepare_pt2e(exported.module(), quantizer)
+    move_exported_model_to_eval(prepared)
 
     calibration_loader = torch.utils.data.DataLoader(
         datasets.ImageFolder(args.calibration_images, transform=image_transform(spec)),
@@ -82,19 +86,25 @@ def main() -> None:
         for index, (image, _) in enumerate(calibration_loader):
             if index >= args.num_calib:
                 break
+            # Native libraries can repeat the same message for every image.
             with suppress_stderr():
                 prepared(image)
 
+    # 4. PT2E API: replace the calibrated observers with quantized operations.
     quantized_model = convert_pt2e(prepared)
     exported_quantized = export(quantized_model, example_inputs)
+
+    # 5. ExecuTorch APIs: delegate supported regions, then package the .pte.
     edge = to_edge_transform_and_lower(
         exported_quantized,
         partitioner=[XnnpackPartitioner()],
         compile_config=EdgeCompileConfig(_check_ir_validity=False),
     )
     program = edge.to_executorch()
+    # Course wrapper: write_pte() handles ExecuTorch version-specific serialization.
     write_pte(program, out)
 
+    # Supporting output: record artifact sizes and delegation for later comparison.
     fp32_pte = artifact_dir / "mobilenetv2_xnnpack.pte"
     metadata = {
         "model": spec["name"],
@@ -103,6 +113,7 @@ def main() -> None:
         "pte": str(out),
         "pte_size_mb": out.stat().st_size / 1_000_000.0,
         "fp32_pte_size_mb": fp32_pte.stat().st_size / 1_000_000.0 if fp32_pte.exists() else None,
+        "calibration_images": str(args.calibration_images),
         "num_calib": min(args.num_calib, len(calibration_loader.dataset)),
         "delegation": inspect_delegation(edge),
     }
@@ -117,7 +128,8 @@ def main() -> None:
 
 
 def skip_classifier_head(node: Any) -> bool:
-    """Keep the final classifier head in fp32 for a steadier top-5 comparison."""
+    # Keep the final classifier layer in FP32 so the lab can compare its top-5
+    # probabilities with the FP32 baseline without quantizing that last layer.
     for fqn, _typ in node.meta.get("nn_module_stack", {}).values():
         if "classifier.1" in str(fqn):
             return False
@@ -125,6 +137,7 @@ def skip_classifier_head(node: Any) -> bool:
 
 
 def image_transform(spec: dict[str, Any]) -> Any:
+    # Use the same resize, crop, and normalization as the deployed application.
     import torchvision.transforms as transforms
 
     prep = spec["input"]["preprocessing"]
@@ -139,6 +152,7 @@ def image_transform(spec: dict[str, Any]) -> Any:
 
 
 def inspect_delegation(edge: Any) -> dict[str, Any]:
+    # Count XNNPACK regions and operators left on the portable path.
     import torch
 
     graph = edge.exported_program().graph_module.graph
@@ -161,6 +175,7 @@ def inspect_delegation(edge: Any) -> dict[str, Any]:
 
 
 def write_pte(program: Any, path: Path) -> None:
+    # Course wrapper around the serialization APIs in the pinned ExecuTorch version.
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("wb") as f:
         if hasattr(program, "write_to_file"):
@@ -170,6 +185,7 @@ def write_pte(program: Any, path: Path) -> None:
 
 
 def configure_quiet_output() -> None:
+    # Supporting setup: filter known warnings without hiding export failures.
     ensure_interpreter_bin_on_path()
     os.environ.setdefault("GLOG_minloglevel", "2")
     os.environ.setdefault("TORCH_CPP_LOG_LEVEL", "ERROR")
@@ -190,7 +206,7 @@ def configure_quiet_output() -> None:
 
 
 def ensure_interpreter_bin_on_path() -> None:
-    """Make venv-provided tools such as flatc visible when using venv/bin/python directly."""
+    # Make venv-provided tools such as flatc visible when using venv/bin/python directly.
     bin_path = Path(sys.executable).parent
     flatc_path = bin_path / "flatc"
     if flatc_path.exists():
@@ -201,8 +217,13 @@ def ensure_interpreter_bin_on_path() -> None:
 
 
 @contextmanager
-def suppress_stderr() -> Any:
-    """Temporarily hide noisy native dependency logs written directly to stderr."""
+def suppress_stderr() -> Iterator[None]:
+    # Used only in repeated calibration loops where native output would appear
+    # once per image. Python tracebacks are printed after stderr is restored.
+    # Set COURSE_DEBUG=1 to keep native diagnostics visible.
+    if os.environ.get("COURSE_DEBUG") == "1":
+        yield
+        return
     saved_stderr = os.dup(2)
     devnull = os.open(os.devnull, os.O_WRONLY)
     try:

@@ -1,4 +1,29 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">ExecuTorch Cutout</string>
+    <string name="chip_on_device_ai">On-device AI</string>
+    <string name="title_cutout_studio">Cutout Studio</string>
+    <string name="subtitle_remove_backgrounds">Remove backgrounds for clean social posts</string>
+    <string name="action_choose_image">Choose image</string>
+    <string name="action_remove_background">Remove background</string>
+    <string name="mode_cutout">Cutout</string>
+    <string name="mode_highlight">Highlight</string>
+    <string name="description_highlight_color">Highlight color</string>
+    <string name="description_original">Original</string>
+    <string name="description_cutout">Cutout</string>
+    <string name="heading_source_image">Source image</string>
+    <string name="caption_source_image">Pick a photo with one clear supported subject.</string>
+    <string name="heading_post_preview">Post preview</string>
+    <string name="caption_post_preview">Checkerboard shows the transparent background.</string>
+    <string name="status_loading_model">Loading model…</string>
+    <string name="status_model_ready">Model ready. Choose an image with a clear supported subject.</string>
+    <string name="status_model_load_failed">Could not load model assets: %1$s</string>
+    <string name="status_image_ready">Image ready. Remove the background to create a post asset.</string>
+    <string name="status_image_open_failed">Could not open image: %1$s</string>
+    <string name="status_creating_cutout">Creating cutout with ExecuTorch…</string>
+    <string name="status_no_foreground">No supported foreground object found. Try a clearer person, cat, dog, car, or similar VOC class.</string>
+    <string name="status_post_asset_ready">Post asset ready. Detected: %1$s (%2$.1f%% of image). Use Cutout or Highlight.</string>
+    <string name="status_cutout_failed">Cutout failed: %1$s</string>
+    <string name="timing_pending">Preprocess: -   Forward: -   Postprocess: -   Total: -</string>
+    <string name="timing_result">Preprocess: %1$d ms   Forward: %2$d ms   Postprocess: %3$d ms   Total: %4$d ms</string>
 </resources>

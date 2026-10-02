@@ -1,3 +1,5 @@
+# Shared model adapters, example inputs, and runtime helpers for Module 1.
+
 from __future__ import annotations
 
 from contextlib import contextmanager
@@ -15,7 +17,7 @@ def configure_quiet_output(
     include_transformers: bool = False,
     include_interpreter_bin: bool = False,
 ) -> None:
-    """Hide dependency warnings that obscure the useful lab output."""
+    # Filter known dependency warnings and progress output; exceptions remain visible.
     if include_interpreter_bin:
         ensure_interpreter_bin_on_path()
 
@@ -46,7 +48,7 @@ def configure_quiet_output(
 
 
 def ensure_interpreter_bin_on_path() -> None:
-    """Make venv-provided tools such as flatc visible when using venv/bin/python directly."""
+    # Make venv-provided tools such as flatc visible when using venv/bin/python directly.
     bin_path = Path(sys.executable).parent
     flatc_path = bin_path / "flatc"
     if flatc_path.exists():
@@ -57,6 +59,7 @@ def ensure_interpreter_bin_on_path() -> None:
 
 
 def quiet_transformers_progress() -> None:
+    # Disable Hugging Face progress output when the installed version supports it.
     try:
         from transformers.utils import logging as transformers_logging
 
@@ -68,7 +71,11 @@ def quiet_transformers_progress() -> None:
 
 @contextmanager
 def suppress_stderr() -> Iterator[None]:
-    """Temporarily hide noisy native dependency logs written directly to stderr."""
+    # Use only around repeated runtime calls that print the same native message.
+    # Set COURSE_DEBUG=1 to keep native diagnostics visible.
+    if os.environ.get("COURSE_DEBUG") == "1":
+        yield
+        return
     saved_stderr = os.dup(2)
     devnull = os.open(os.devnull, os.O_WRONLY)
     try:
@@ -81,6 +88,7 @@ def suppress_stderr() -> Iterator[None]:
 
 
 def load_hf_model(model_cls: Any, model_id: str) -> Any:
+    # Load a Hugging Face model in FP32 across old and new Transformers APIs.
     import torch
 
     try:
@@ -90,16 +98,17 @@ def load_hf_model(model_cls: Any, model_id: str) -> Any:
 
 
 def load_executorch_program(pte_path: Path | str) -> Any:
+    # Course wrapper around ExecuTorch's _load_for_executorch() runtime binding.
     try:
         from executorch.extension.pybindings.portable_lib import _load_for_executorch
     except ImportError as exc:
         raise RuntimeError(
             "Could not import ExecuTorch portable pybindings. This usually means "
             "the Python, torch, and executorch wheels in this virtual environment "
-            "are not ABI-compatible. Module 1 is pinned for Python 3.11. If this "
-            "venv was created with Python 3.13, remove it and recreate it with "
-            "`PYENV_VERSION=3.11.14 python -m venv "
-            "~/executorch_on_arm/.cpu_lab_venv`, then reinstall "
+            "are not ABI-compatible. Module 1 is pinned for Python 3.12. If this "
+            "venv was created with another Python version, remove it, select "
+            "Python with `pyenv shell 3.12.14`, recreate it with `python -m venv "
+            "~/executorch_on_arm/.cpu_lab_venv`, activate it, then reinstall "
             "`module-1-transformer-inference-with-xnnpack/requirements.txt`.\n\n"
             f"Python: {sys.version.split()[0]}\n"
             f"torch: {installed_version('torch')}\n"
@@ -111,6 +120,7 @@ def load_executorch_program(pte_path: Path | str) -> Any:
 
 
 def installed_version(package_name: str) -> str:
+    # Return a package version for diagnostic error messages.
     try:
         return version(package_name)
     except PackageNotFoundError:
@@ -118,54 +128,61 @@ def installed_version(package_name: str) -> str:
 
 
 class LastTokenLogits:
-    """Wrap OPT so export/runtime returns only the logits needed for next-token generation."""
+    # Return only the logits needed for the next causal-LM generation step.
 
     def __new__(cls, model: Any) -> Any:
         import torch
 
         class _LastTokenLogits(torch.nn.Module):
-            def __init__(self, wrapped: Any):
+            def __init__(self, model: Any):
                 super().__init__()
-                self.wrapped = wrapped
+                self.model = model
 
             def forward(self, input_ids: Any, attention_mask: Any) -> Any:
-                out = self.wrapped(input_ids=input_ids, attention_mask=attention_mask, use_cache=False)
-                positions = torch.arange(out.logits.shape[1], device=out.logits.device)
-                last_token_pos = (attention_mask.to(torch.int64) * positions).amax(dim=1)
-                batch = torch.arange(input_ids.shape[0], device=input_ids.device)
-                return out.logits[batch, last_token_pos, :]
+                output = self.model(input_ids=input_ids, attention_mask=attention_mask, use_cache=False)
+                token_positions = torch.arange(output.logits.shape[1], device=output.logits.device)
+                # The mask is 1 for real tokens, so the row maximum is the last
+                # non-padding position for each item in the batch.
+                last_token_positions = (attention_mask.to(torch.int64) * token_positions).amax(dim=1)
+                batch_indices = torch.arange(input_ids.shape[0], device=input_ids.device)
+                return output.logits[batch_indices, last_token_positions, :]
 
         return _LastTokenLogits(model)
 
 
 class MaskLogits:
-    """Wrap DistilBERT so export/runtime returns only logits at the single [MASK] token."""
+    # Wrap DistilBERT so export/runtime returns only logits at the single [MASK] token.
 
     def __new__(cls, model: Any, mask_token_id: int) -> Any:
         import torch
 
         class _MaskLogits(torch.nn.Module):
-            def __init__(self, wrapped: Any, mask_id: int):
+            def __init__(self, model: Any, mask_token_id: int):
                 super().__init__()
-                self.wrapped = wrapped
-                self.mask_id = mask_id
+                self.model = model
+                self.mask_token_id = mask_token_id
 
             def forward(self, input_ids: Any, attention_mask: Any) -> Any:
-                logits = self.wrapped(input_ids=input_ids, attention_mask=attention_mask).logits
-                mask_pos = (input_ids == self.mask_id).to(torch.int64).argmax(dim=1)
-                batch = torch.arange(input_ids.shape[0], device=input_ids.device)
-                return logits[batch, mask_pos, :]
+                # DistilBERT returns [batch, sequence, vocabulary] logits.
+                logits = self.model(input_ids=input_ids, attention_mask=attention_mask).logits
+                mask_positions = (input_ids == self.mask_token_id).to(torch.int64).argmax(dim=1)
+                batch_indices = torch.arange(input_ids.shape[0], device=input_ids.device)
+                # Pair each batch item with its own mask position to return
+                # [batch, vocabulary], not every mask position for every item.
+                return logits[batch_indices, mask_positions, :]
 
         return _MaskLogits(model, mask_token_id)
 
 
 def example_inputs(spec: dict[str, Any]) -> tuple[Any, ...]:
+    # Tokenize the spec prompt into the fixed-shape inputs used by export and benchmarks.
     from transformers import AutoTokenizer
 
-    if spec["adapter"] == "opt125m":
+    if spec["adapter"] == "causal_lm":
         tokenizer = AutoTokenizer.from_pretrained(spec["model_id"])
         if tokenizer.pad_token is None:
             tokenizer.pad_token = tokenizer.eos_token
+        tokenizer.padding_side = "right"
         prompt = spec.get("example_prompt") or "Write a short sentence about fast inference."
     elif spec["adapter"] == "distilbert_fillmask":
         tokenizer = AutoTokenizer.from_pretrained(spec["model_id"], use_fast=True)
@@ -184,6 +201,7 @@ def example_inputs(spec: dict[str, Any]) -> tuple[Any, ...]:
 
 
 def format_ms(value: float) -> str:
+    # Format millisecond measurements for learner-facing output.
     if value >= 1000.0:
         return f"{value / 1000.0:.2f} s"
     return f"{value:.0f} ms"

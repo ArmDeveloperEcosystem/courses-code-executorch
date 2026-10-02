@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
+# Prepare MobileNetV2 weights, labels, sample image, and model contract.
+
 from __future__ import annotations
 
 import argparse
-from contextlib import contextmanager
 import hashlib
 import json
 import logging
 import os
 from pathlib import Path
-from typing import Any
 from urllib.error import URLError
 from urllib.request import Request, urlopen
 import warnings
@@ -20,6 +20,7 @@ SAMPLE_SOURCE_PAGE = "https://commons.wikimedia.org/wiki/File:Labrador_Retriever
 
 
 def main() -> None:
+    # Script setup: command-line options and output paths.
     parser = argparse.ArgumentParser(description="Prepare MobileNetV2 assets and write a model spec.")
     parser.add_argument("--out", type=Path, default=Path("module-2-cnn-inference-with-quantization/artifacts/mobilenetv2"))
     parser.add_argument("--weights-name", default="mobilenet_v2.pth")
@@ -35,15 +36,15 @@ def main() -> None:
 
     configure_quiet_output()
 
-    with suppress_stderr():
-        import torch
-        from torchvision.models import MobileNet_V2_Weights, mobilenet_v2
+    import torch
+    from torchvision.models import MobileNet_V2_Weights, mobilenet_v2
 
     args.out.mkdir(parents=True, exist_ok=True)
     weights_path = args.out / args.weights_name
     labels_path = args.out / args.labels_name
     sample_path = args.out / args.sample_name
 
+    # TorchVision API: load the pinned pretrained weights and their label order.
     weights = MobileNet_V2_Weights.IMAGENET1K_V1
     model = mobilenet_v2(weights=weights).eval()
     torch.save(model.state_dict(), weights_path)
@@ -63,12 +64,22 @@ def main() -> None:
         except URLError as exc:
             print(f"Sample image download skipped: {exc}")
 
+    # Record the tensor shape and preprocessing used by export and applications.
     spec = {
         "adapter": "mobilenetv2",
         "name": "mobilenetv2",
         "model_family": "mobilenet",
         "model_variant": "mobilenet_v2",
         "task": "image_classification",
+        "model_source": {
+            "provider": "TorchVision",
+            "documentation": "https://docs.pytorch.org/vision/main/models/generated/torchvision.models.mobilenet_v2.html",
+            "weights_variant": "IMAGENET1K_V1",
+            "source_code_license": "BSD-3-Clause",
+            "source_code_license_url": "https://github.com/pytorch/vision/blob/main/LICENSE",
+            "training_dataset": "ImageNet-1K",
+            "training_dataset_terms": "https://image-net.org/accessagreement",
+        },
         "weights": args.weights_name,
         "labels": args.labels_name,
         "sample_image": args.sample_name if sample_path.exists() else None,
@@ -79,7 +90,7 @@ def main() -> None:
             "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
             "source_page": SAMPLE_SOURCE_PAGE if args.sample_url == SAMPLE_URL else args.sample_url,
             "source": "Wikimedia Commons",
-            "author": "Chiemsee2024",
+            "author": "Chiemsee2016",
             "sha256": sample_sha256,
         }
         if sample_path.exists()
@@ -108,7 +119,7 @@ def main() -> None:
 
 
 def configure_quiet_output() -> None:
-    """Keep dependency warnings from hiding the useful lab output."""
+    # Supporting setup: filter known dependency warnings without hiding errors.
     os.environ.setdefault("GLOG_minloglevel", "2")
     os.environ.setdefault("TORCH_CPP_LOG_LEVEL", "ERROR")
     os.environ.setdefault("PYTHONWARNINGS", "ignore")
@@ -125,22 +136,8 @@ def configure_quiet_output() -> None:
     ):
         logging.getLogger(name).setLevel(logging.ERROR)
 
-
-@contextmanager
-def suppress_stderr() -> Any:
-    """Temporarily hide noisy native dependency logs written directly to stderr."""
-    saved_stderr = os.dup(2)
-    devnull = os.open(os.devnull, os.O_WRONLY)
-    try:
-        os.dup2(devnull, 2)
-        yield
-    finally:
-        os.dup2(saved_stderr, 2)
-        os.close(saved_stderr)
-        os.close(devnull)
-
-
 def download_sample(url: str, path: Path, expected_sha256: str | None) -> str:
+    # Download the sample once and verify its content when a hash is known.
     if path.exists():
         current_sha256 = file_sha256(path)
         if expected_sha256 is None or current_sha256 == expected_sha256:
@@ -165,6 +162,7 @@ def download_sample(url: str, path: Path, expected_sha256: str | None) -> str:
 
 
 def file_sha256(path: Path) -> str:
+    # Hash a file in chunks so large artifacts do not need to fit in memory.
     digest = hashlib.sha256()
     with path.open("rb") as file:
         for chunk in iter(lambda: file.read(1024 * 1024), b""):

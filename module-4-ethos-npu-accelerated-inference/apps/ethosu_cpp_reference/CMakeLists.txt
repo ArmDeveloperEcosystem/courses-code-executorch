@@ -40,44 +40,26 @@ endforeach()
 
 find_package(Python3 REQUIRED COMPONENTS Interpreter)
 
-load_cache(
-  "${ET_BUILD_DIR_PATH}"
-  READ_WITH_PREFIX ET_RUNNER_
-  EXECUTORCH_ENABLE_EVENT_TRACER
-)
-
 set(ET_BUILD_LIB_DIR "${ET_BUILD_DIR_PATH}/executorch")
+set(ET_RUNNER_LIB_DIR "${ET_BUILD_DIR_PATH}/examples/arm/executor_runner")
 set(
   ET_REQUIRED_LIBRARIES
-  "${ET_BUILD_LIB_DIR}/libexecutorch.a"
   "${ET_BUILD_LIB_DIR}/libexecutorch_core.a"
   "${ET_BUILD_LIB_DIR}/backends/arm/libexecutorch_delegate_ethos_u.a"
   "${ET_BUILD_LIB_DIR}/backends/cortex_m/libcortex_m_kernels.a"
-  "${ET_BUILD_LIB_DIR}/backends/cortex_m/libcortex_m_ops_lib.a"
   "${ET_BUILD_LIB_DIR}/backends/cortex_m/cmsis_nn-build/libcmsis-nn.a"
   "${ET_BUILD_LIB_DIR}/kernels/portable/libportable_kernels.a"
   "${ET_BUILD_LIB_DIR}/kernels/portable/cpu/util/libkernels_util_all_deps.a"
   "${ET_BUILD_LIB_DIR}/kernels/quantized/libquantized_kernels.a"
-  "${ET_BUILD_LIB_DIR}/kernels/quantized/libquantized_ops_lib.a"
+  "${ET_RUNNER_LIB_DIR}/libarm_portable_ops_lib.a"
+  "${ET_RUNNER_LIB_DIR}/libarm_quantized_ops_lib.a"
+  "${ET_RUNNER_LIB_DIR}/libarm_cortex_m_ops_lib.a"
 )
 foreach(required_library IN LISTS ET_REQUIRED_LIBRARIES)
   if(NOT EXISTS "${required_library}")
     message(FATAL_ERROR "Required Module 4 library does not exist: ${required_library}")
   endif()
 endforeach()
-
-if(ET_RUNNER_EXECUTORCH_ENABLE_EVENT_TRACER)
-  set(
-    ET_TRACING_LIBRARIES
-    "${ET_BUILD_LIB_DIR}/devtools/etdump/libetdump.a"
-    "${ET_DIR_PATH}/third-party/flatcc/lib/libflatccrt.a"
-  )
-  foreach(required_library IN LISTS ET_TRACING_LIBRARIES)
-    if(NOT EXISTS "${required_library}")
-      message(FATAL_ERROR "Required ETDump library does not exist: ${required_library}")
-    endif()
-  endforeach()
-endif()
 
 include(${ET_DIR_PATH}/backends/arm/scripts/corstone_utils.cmake)
 fetch_ethos_u_content(${ETHOS_SDK_PATH} ${ET_DIR_PATH})
@@ -90,7 +72,7 @@ add_custom_command(
   OUTPUT "${GENERATED_DIR}/model_pte.h"
   COMMAND
     ${Python3_EXECUTABLE}
-    ${ET_DIR_PATH}/examples/arm/executor_runner/pte_to_header.py
+    ${ET_DIR_PATH}/examples/arm/common/pte_to_header.py
     --pte ${ET_PTE_FILE_PATH}
     --outdir ${GENERATED_DIR}
   DEPENDS ${ET_PTE_FILE_PATH}
@@ -149,26 +131,21 @@ target_compile_definitions(
   PRIVATE
     C10_USING_CUSTOM_GENERATED_MACROS
 )
-if(ET_RUNNER_EXECUTORCH_ENABLE_EVENT_TRACER)
-  target_compile_definitions(ethosu_cpp_reference PRIVATE ET_EVENT_TRACER_ENABLED)
-endif()
-
 target_link_libraries(
   ethosu_cpp_reference
   PUBLIC
     ethosu_target_init
     "-Wl,--start-group"
     "-Wl,--whole-archive"
-    ${ET_BUILD_LIB_DIR}/libexecutorch.a
-    ${ET_BUILD_LIB_DIR}/kernels/quantized/libquantized_ops_lib.a
-    ${ET_BUILD_LIB_DIR}/backends/cortex_m/libcortex_m_ops_lib.a
     ${ET_BUILD_LIB_DIR}/backends/arm/libexecutorch_delegate_ethos_u.a
+    ${ET_RUNNER_LIB_DIR}/libarm_portable_ops_lib.a
+    ${ET_RUNNER_LIB_DIR}/libarm_quantized_ops_lib.a
+    ${ET_RUNNER_LIB_DIR}/libarm_cortex_m_ops_lib.a
     ${ET_BUILD_LIB_DIR}/kernels/quantized/libquantized_kernels.a
     ${ET_BUILD_LIB_DIR}/backends/cortex_m/libcortex_m_kernels.a
     ${ET_BUILD_LIB_DIR}/kernels/portable/libportable_kernels.a
     ${ET_BUILD_LIB_DIR}/libexecutorch_core.a
     ${ET_BUILD_LIB_DIR}/backends/cortex_m/cmsis_nn-build/libcmsis-nn.a
-    ${ET_TRACING_LIBRARIES}
     "-Wl,--no-whole-archive"
     ${ET_BUILD_LIB_DIR}/kernels/portable/cpu/util/libkernels_util_all_deps.a
     "-Wl,--end-group"
@@ -188,7 +165,7 @@ execute_process(
     ${COMPILER_PREPROCESSOR_OPTIONS}
     -DETHOSU_ARENA=1
     -o ${LINK_FILE_OUT}
-    ${ET_DIR_PATH}/examples/arm/executor_runner/Corstone-320.ld
+    ${ET_DIR_PATH}/backends/arm/cmake/linker_scripts/Corstone-320.ld
   COMMAND_ERROR_IS_FATAL ANY
 )
 target_link_options(

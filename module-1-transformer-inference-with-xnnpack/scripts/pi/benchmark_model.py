@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# Benchmark the same Module 1 model contract with PyTorch or ExecuTorch.
+
 from __future__ import annotations
 
 import argparse
@@ -23,12 +25,12 @@ from _support.common import (
     load_executorch_program,
     load_hf_model,
     quiet_transformers_progress,
-    suppress_stderr,
 )
 from course_support.benchmarking import benchmark, print_stats, save_plots, write_results
 
 
 def main() -> None:
+    # Script setup: command-line options, model settings, and output paths.
     parser = argparse.ArgumentParser(description="Benchmark PyTorch or ExecuTorch on the Pi.")
     parser.add_argument("--runtime", choices=["pytorch", "executorch"], required=True)
     parser.add_argument("--backend", choices=["portable", "xnnpack"], default=None)
@@ -47,9 +49,8 @@ def main() -> None:
 
     configure_quiet_output(include_transformers=True)
 
-    with suppress_stderr():
-        import torch
-        quiet_transformers_progress()
+    import torch
+    quiet_transformers_progress()
 
     spec = json.loads(args.spec.read_text())
     model_name = spec["name"]
@@ -63,8 +64,8 @@ def main() -> None:
     result_name = format_result_name(model_name, args.runtime, backend)
 
     if args.runtime == "pytorch":
-        with suppress_stderr():
-            module, inputs = prepare_model(spec)
+        # PyTorch eager baseline: load the nn.Module and example tensors.
+        module, inputs = prepare_model(spec)
 
         def forward() -> object:
             with torch.inference_mode():
@@ -73,14 +74,17 @@ def main() -> None:
     else:
         if args.pte is None:
             raise ValueError("--pte is required for --runtime executorch")
-        with suppress_stderr():
-            model = load_executorch_program(args.pte)
-            inputs = example_inputs(spec)
+        # ExecuTorch Python runtime: load the .pte and use the exported inputs.
+        model = load_executorch_program(args.pte)
+        inputs = example_inputs(spec)
 
         def forward() -> object:
             with torch.inference_mode():
+                # ExecuTorch runtime: invoke the exported forward method.
                 return model.forward(inputs)
 
+    # The shared benchmark helper suppresses repeated native output only while
+    # timing each forward call.
     times_ms, stats = benchmark(forward, warmups=args.warmups, runs=args.runs)
     plot_dir = args.plots or args.out.parent / "plots"
     plot_paths = []
@@ -106,14 +110,16 @@ def main() -> None:
 
 
 def prepare_model(spec: dict[str, Any]) -> tuple[Any, tuple[Any, ...]]:
-    if spec["adapter"] == "opt125m":
-        return prepare_opt(spec)
+    # Select the PyTorch model adapter named by model_spec.json.
+    if spec["adapter"] == "causal_lm":
+        return prepare_causal_lm(spec)
     if spec["adapter"] == "distilbert_fillmask":
         return prepare_distilbert(spec)
     raise ValueError(f"Unknown adapter: {spec['adapter']}")
 
 
-def prepare_opt(spec: dict[str, Any]) -> tuple[Any, tuple[Any, ...]]:
+def prepare_causal_lm(spec: dict[str, Any]) -> tuple[Any, tuple[Any, ...]]:
+    # Load the causal LM with the same last-token contract used during export.
     from transformers import AutoModelForCausalLM
 
     model = load_hf_model(AutoModelForCausalLM, spec["model_id"]).eval()
@@ -121,6 +127,7 @@ def prepare_opt(spec: dict[str, Any]) -> tuple[Any, tuple[Any, ...]]:
 
 
 def prepare_distilbert(spec: dict[str, Any]) -> tuple[Any, tuple[Any, ...]]:
+    # Load DistilBERT with the same mask-logit contract used during export.
     from transformers import AutoModelForMaskedLM, AutoTokenizer
 
     tokenizer = AutoTokenizer.from_pretrained(spec["model_id"], use_fast=True)
@@ -129,6 +136,7 @@ def prepare_distilbert(spec: dict[str, Any]) -> tuple[Any, tuple[Any, ...]]:
 
 
 def infer_backend(runtime: str, pte: Path | None, out: Path) -> str:
+    # Infer a display label from artifact names when --backend is omitted.
     if runtime == "pytorch":
         return "eager"
 

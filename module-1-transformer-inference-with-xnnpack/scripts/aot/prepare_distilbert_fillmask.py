@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# Export fixed-shape DistilBERT mask logits and write its model contract.
+
 from __future__ import annotations
 
 import argparse
@@ -15,6 +17,7 @@ from _support.common import MaskLogits, configure_quiet_output, load_hf_model
 
 
 def main() -> None:
+    # Script setup: command-line options and output paths.
     parser = argparse.ArgumentParser(description="Prepare DistilBERT fill-mask by exporting it and writing a model spec.")
     parser.add_argument("--model-id", default="distilbert-base-uncased")
     parser.add_argument("--seq-len", type=int, default=64)
@@ -37,12 +40,15 @@ def main() -> None:
     args.out.mkdir(parents=True, exist_ok=True)
     exported_path = args.out / args.exported_name
 
+    # 1. Hugging Face and PyTorch: load the tokenizer and model.
     tokenizer = AutoTokenizer.from_pretrained(args.model_id, use_fast=True)
     prompt = args.example_prompt or f"The Raspberry Pi is a {tokenizer.mask_token} computer."
     if tokenizer.mask_token not in prompt:
         raise ValueError(f"Example prompt must contain {tokenizer.mask_token}")
 
     model = load_hf_model(AutoModelForMaskedLM, args.model_id).to(args.device).eval()
+    # The wrapper narrows [batch, sequence, vocabulary] output to the
+    # vocabulary logits at the one mask position in each batch item.
     wrapped = MaskLogits(model, tokenizer.mask_token_id).eval()
     encoded = tokenizer(
         prompt,
@@ -56,15 +62,27 @@ def main() -> None:
         encoded["attention_mask"].to(args.device),
     )
 
+    # 2. PyTorch export API: capture the fixed-shape forward graph.
     print(f"Exporting {args.model_id} to {exported_path}...")
     with torch.inference_mode():
         exported_program = export(wrapped, example_inputs)
     save(exported_program, exported_path)
 
+    model_source = {"repository": f"https://huggingface.co/{args.model_id}"}
+    if args.model_id in {"distilbert-base-uncased", "distilbert/distilbert-base-uncased"}:
+        model_source.update(
+            {
+                "license": "Apache-2.0",
+                "license_url": "https://huggingface.co/distilbert/distilbert-base-uncased/blob/main/LICENSE",
+            }
+        )
+
+    # Supporting output: record the tensor shapes required at runtime.
     spec = {
         "adapter": "distilbert_fillmask",
         "name": "distilbert_fillmask",
         "model_id": args.model_id,
+        "model_source": model_source,
         "seq_len": args.seq_len,
         "example_prompt": prompt,
         "exported_program": args.exported_name,

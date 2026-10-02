@@ -11,10 +11,6 @@
 #include <executorch/runtime/executor/program.h>
 #include <executorch/runtime/platform/log.h>
 
-#if defined(ET_EVENT_TRACER_ENABLED)
-#include <executorch/devtools/etdump/etdump_flatcc.h>
-#endif
-
 #include "app_config.h"
 
 namespace app {
@@ -53,6 +49,7 @@ executorch::runtime::Error run_model(
   using executorch::runtime::Result;
   using executorch::runtime::Span;
 
+  // ExecuTorch C++ API: expose the embedded .pte bytes and load the Program.
   BufferDataLoader loader(program_data, program_size);
   Result<Program> program = Program::load(&loader);
   if (!program.ok()) {
@@ -69,6 +66,7 @@ executorch::runtime::Error run_model(
     return method_name.error();
   }
 
+  // Method metadata provides the planned-memory sizes and input tensor shape.
   Result<MethodMeta> method_meta = program->method_meta(*method_name);
   if (!method_meta.ok()) {
     ET_LOG(
@@ -78,6 +76,8 @@ executorch::runtime::Error run_model(
     return method_meta.error();
   }
 
+  // ExecuTorch requires the application to provide method, planned, and
+  // temporary memory. These buffers remain alive until execution completes.
   MemoryAllocator method_allocator(
       kMethodAllocatorPoolSize, method_allocation_pool);
   MemoryAllocator temporary_allocator(
@@ -112,15 +112,9 @@ executorch::runtime::Error run_model(
   MemoryManager memory_manager(
       &method_allocator, &planned_memory, &temporary_allocator);
 
-#if defined(ET_EVENT_TRACER_ENABLED)
-  executorch::etdump::ETDumpGen event_tracer;
-  executorch::runtime::EventTracer* event_tracer_ptr = &event_tracer;
-#else
-  executorch::runtime::EventTracer* event_tracer_ptr = nullptr;
-#endif
-
+  // ExecuTorch C++ API: bind the selected method to application-owned memory.
   Result<Method> method = program->load_method(
-      *method_name, &memory_manager, event_tracer_ptr);
+      *method_name, &memory_manager);
   if (!method.ok()) {
     ET_LOG(
         Error,
@@ -152,6 +146,7 @@ executorch::runtime::Error run_model(
     return Error::InvalidArgument;
   }
 
+  // The tensor refers to input_data directly; it does not copy the bytes.
   executorch::aten::TensorImpl input_impl(
       input_meta->scalar_type(),
       input_meta->sizes().size(),
@@ -170,6 +165,7 @@ executorch::runtime::Error run_model(
     return status;
   }
 
+  // ExecuTorch C++ API: execute the exported method synchronously.
   status = method->execute();
   if (status != Error::Ok) {
     ET_LOG(
@@ -179,6 +175,7 @@ executorch::runtime::Error run_model(
     return status;
   }
 
+  // Retrieve the method outputs, then hand tensors to application postprocessing.
   std::vector<EValue> outputs(method->outputs_size());
   status = method->get_outputs(outputs.data(), outputs.size());
   if (status != Error::Ok) {
