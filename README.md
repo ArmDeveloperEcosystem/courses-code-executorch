@@ -1,7 +1,7 @@
 # Optimize and Deploy AI Inference with ExecuTorch on Arm
 
-[![Repository integrity](https://github.com/arm-education/executorch_on_arm_course/actions/workflows/repo-integrity.yml/badge.svg?branch=main)](https://github.com/arm-education/executorch_on_arm_course/actions/workflows/repo-integrity.yml)
-[![Module 3 Android](https://github.com/arm-education/executorch_on_arm_course/actions/workflows/module-3-android.yml/badge.svg?branch=main)](https://github.com/arm-education/executorch_on_arm_course/actions/workflows/module-3-android.yml)
+[![Repository integrity](https://github.com/ArmDeveloperEcosystem/arm-courses-code-executorch/actions/workflows/repo-integrity.yml/badge.svg?branch=main)](https://github.com/arm-education/executorch_on_arm_course/actions/workflows/repo-integrity.yml)
+[![Module 3 Android](https://github.com/ArmDeveloperEcosystem/arm-courses-code-executorch/actions/workflows/module-3-android.yml/badge.svg?branch=main)](https://github.com/arm-education/executorch_on_arm_course/actions/workflows/module-3-android.yml)
 
 This repository accompanies the hands-on course for deploying PyTorch models to Arm CPUs and NPUs with
 ExecuTorch available on learn.arm.com, [_Optimize and deploy AI inference with ExecuTorch on Arm_](https://learn.arm.com/courses/executorch-on-arm/)  
