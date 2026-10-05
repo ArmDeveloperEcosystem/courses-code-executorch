@@ -1,8 +1,6 @@
 name: Module 3 Android
 
 on:
-  workflow_dispatch:
-  
   pull_request:
     paths:
       - "module-3-executorch-on-android-semantic-segmentation/android/**"
