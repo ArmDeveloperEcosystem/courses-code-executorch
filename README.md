@@ -4,7 +4,8 @@
 [![Module 3 Android](https://github.com/arm-education/executorch_on_arm_course/actions/workflows/module-3-android.yml/badge.svg?branch=main)](https://github.com/arm-education/executorch_on_arm_course/actions/workflows/module-3-android.yml)
 
 This repository accompanies the hands-on course for deploying PyTorch models to Arm CPUs and NPUs with
-ExecuTorch available at [URL TO FOLLOW].
+ExecuTorch available on learn.arm.com, [_Optimize and deploy AI inference with ExecuTorch on Arm_](https://learn.arm.com/courses/executorch-on-arm/)  
+
 The course walks through ahead-of-time model preparation,
 backend delegation and graph inspection, post-training quantization, and runtime benchmarking and example applications across a range of hardware targets.
 
