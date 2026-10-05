@@ -1,11 +1,7 @@
-![Laptop, smartphone, smartwatch, controllers, and other edge devices](docs/images/course-banner.jpg)
-
 # Optimize and Deploy AI Inference with ExecuTorch on Arm
 
 [![Repository integrity](https://github.com/arm-education/executorch_on_arm_course/actions/workflows/repo-integrity.yml/badge.svg?branch=main)](https://github.com/arm-education/executorch_on_arm_course/actions/workflows/repo-integrity.yml)
 [![Module 3 Android](https://github.com/arm-education/executorch_on_arm_course/actions/workflows/module-3-android.yml/badge.svg?branch=main)](https://github.com/arm-education/executorch_on_arm_course/actions/workflows/module-3-android.yml)
-
-[Course content](#course-content) · [Course Overview](#course-overview) · [Who This Is For](#who-this-is-for) · [Hardware and Environment](#hardware-and-environment) · [Course Modules](#course-modules)
 
 This repository accompanies the hands-on course for deploying PyTorch models to Arm CPUs and NPUs with
 ExecuTorch available at [URL TO FOLLOW].
