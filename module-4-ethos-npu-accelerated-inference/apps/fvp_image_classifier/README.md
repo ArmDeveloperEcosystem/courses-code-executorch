@@ -29,3 +29,9 @@ git apply -R --directory=examples/arm/executor_runner \
 
 rm examples/arm/executor_runner/imagenet_labels.h
 ```
+
+## Licensing
+ 
+This exercise applies Arm-authored modifications to the ExecuTorch Arm executor runner. ExecuTorch is licensed under [BSD-3-Clause](https://spdx.org/licenses/BSD-3-Clause.html). Any ExecuTorch source code included in `arm_executor_runner_topk.patch` remains subject to the BSD-3-Clause license.
+ 
+The Arm-authored portions of `arm_executor_runner_topk.patch` and the `generate_imagenet_labels_header.py` script are licensed under [BSD-3-Clause-Clear](https://spdx.org/licenses/BSD-3-Clause-Clear.html).
