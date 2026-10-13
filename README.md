@@ -1,8 +1,5 @@
 # Course code for 'Optimize and deploy AI inference with ExecuTorch on Arm'
 
-[![Repository integrity](https://github.com/ArmDeveloperEcosystem/arm-courses-code-executorch/actions/workflows/repo-integrity.yml/badge.svg?branch=main)](https://github.com/ArmDeveloperEcosystem/arm-courses-code-executorch/actions/workflows/repo-integrity.yml)
-[![Module 3 Android](https://github.com/ArmDeveloperEcosystem/arm-courses-code-executorch/actions/workflows/module-3-android.yml/badge.svg?branch=main)](https://github.com/ArmDeveloperEcosystem/arm-courses-code-executorch/actions/workflows/module-3-android.yml)
-
 This repository contains the supporting scripts and example applications for
 [Optimize and deploy AI inference with ExecuTorch on Arm](https://learn.arm.com/courses/executorch-on-arm/).
 Use the course for prerequisites, setup, and exercise instructions. The links below
